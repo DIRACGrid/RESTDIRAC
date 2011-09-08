@@ -18,7 +18,7 @@ from DIRAC.Core.Base.DB import DB
 
 class CredentialsDB( DB ):
 
-  VALID_OAUTH_TOKEN_TYPES = ( "request", "verifier", "access" )
+  VALID_OAUTH_TOKEN_TYPES = ( "request", "access" )
 
   def __init__( self, maxQueueSize = 10 ):
     DB.__init__( self, 'CredentialsDB', 'WebAPI/CredentialsDB', maxQueueSize )
@@ -57,6 +57,15 @@ class CredentialsDB( DB ):
                                                   },
                                       'PrimaryKey' : 'Id',
                                       'UniqueIndexes' : { 'Identity' : [ 'UserDN', 'UserGroup' ] }
+                                     }
+
+    if 'CredDB_OAVerifier' not in tablesInDB:
+      tablesD[ 'CredDB_OAVerifier' ] = { 'Fields' : { 'Verifier' : 'CHAR(32) NOT NULL',
+                                                      'UserId' : 'INT UNSIGNED NOT NULL',
+                                                      'ConsumerKey' : 'VARCHAR(255) NOT NULL',
+                                                      'ExpirationTime' : 'DATETIME'
+                                                  },
+                                      'PrimaryKey' : 'Verifier',
                                      }
 
     return self._createTables( tablesD )
@@ -162,6 +171,33 @@ class CredentialsDB( DB ):
       return S_OK( data[0][0] )
     return S_ERROR( "Token is either unknown or invalid" )
 
+  def getTokens( self, condDict = {} ):
+    sqlTables = [ '`CredDB_OATokens` t', '`CredDB_Identities` i' ]
+    sqlCond = [ "t.UserId = i.Id"]
+
+    fields = [ 'Token', 'Secret', 'ConsumerKey', 'Type', 'UserDN', 'UserGroup' ]
+    sqlFields = []
+    for field in fields:
+      if field in ( 'UserDN', 'UserGroup' ):
+        sqlField = "i.%s" % field
+      else:
+        sqlField = "t.%s" % field
+      sqlFields.append( sqlField )
+      if field in condDict:
+        if type( condDict[ field ] ) not in ( types.ListType, types.TupleType ):
+          condDict[ field ] = [ str( condDict[ field ] ) ]
+        sqlValues = [ self._escapeString( val )[ 'Value' ] for val in condDict[ field ] ]
+        if len( sqlValues ) == 1:
+          sqlCond.append( "%s = %s" % ( sqlField, sqlValues[0] ) )
+        else:
+          sqlCond.append( "%s in ( %s )" % ( sqlField, ",".join( sqlValues[0] ) ) )
+
+    sqlCmd = "SELECT %s FROM %s WHERE %s" % ( ", ". join( sqlFields ), ", ".join( sqlTables ), " AND ".join( sqlCond ) )
+    result = self._query( sqlCmd )
+    if not result[ 'OK' ]:
+      return result
+    return S_OK( { 'Parameters' : fields, 'Records' : result[ 'Value' ] } )
+
   def revokeUserToken( self, userDN, userGroup, token ):
     result = self.getIdentityId( userDN, userGroup )
     if not result[ 'OK' ]:
@@ -186,13 +222,73 @@ class CredentialsDB( DB ):
     sqlDel = "DELETE FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
     return self._update( sqlDel )
 
-  def cleanExpiredTokens( self, minLifeTime = 0 ):
+  def cleanExpired( self, minLifeTime = 0 ):
     try:
       minLifeTime = int( minLifeTime )
     except ValueError:
       return S_ERROR( "minLifeTime has to be an integer" )
-    sqlDel = "DELETE FROM `CredDB_OATokens` WHERE TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) < %d" % minLifeTime
-    return self._update( sqlDel )
+    totalCleaned = 0
+    for table in ( "CredDB_OATokens", "CredDB_OAVerifier" ):
+      sqlDel = "DELETE FROM `CredDB_OATokens` WHERE TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) < %d" % minLifeTime
+      result = self._update( sqlDel )
+      if not result[ 'OK' ]:
+        return result
+      totalCleaned += result[ 'Value' ]
+    return S_OK( totalCleaned )
+
+  def generateVerifier( self, userDN, userGroup, consumerKey, lifeTime = 3600, retries = 5 ):
+    result = self.getIdentityId( userDN, userGroup )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    userId = result[ 'Value' ]
+    verifier = md5.md5( "%s|%s|%s|%s" % ( userId, consumerKey, time.time(), random.random() ) ).hexdigest()
+    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+      return S_ERROR( "Consumer key doesn't have a correct size" )
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+
+    sqlFields = "( Verifier, UserId, ConsumerKey, ExpirationTime )"
+    sqlValues = [ "'%s'" % verifier, "%d" % userId, sqlConsumerKey,
+                 "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime ]
+    sqlIn = "INSERT INTO `CredDB_OAVerifier` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
+    result = self._update( sqlIn )
+    if not result[ 'OK' ]:
+      if result[ 'Message' ].find( "Duplicate key" ) > -1 and retries > 0 :
+        return self.generateVerifier( userDN, userGroup, consumerKey, lifeTime, retries - 1 )
+      return result
+    return S_OK( verifier )
+
+  def validateVerifier( self, userDN, userGroup, consumerKey, verifier ):
+    result = self.getIdentityId( userDN, userGroup )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    userId = result[ 'Value' ]
+    sqlCond = [ "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" ]
+    sqlCond.append( "UserId=%d" % userId )
+    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+      return S_ERROR( "Consumer key doesn't have a correct size" )
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+    sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
+    result = self._escapeString( verifier )
+    if not result[ 'OK' ]:
+      return result
+    sqlVerifier = result[ 'Value' ]
+    sqlCond.append( "Verifier=%s" % sqlVerifier )
+    sqlDel = "DELETE FROM `CredDB_OAVerifier` WHERE %s" % " AND ".join( sqlCond )
+    result = self._update( sqlDel )
+    if not result[ 'OK' ]:
+      return result
+    if result[ 'Value' ] < 1:
+      return S_ERROR( "Verifier is unknown" )
+    return S_OK()
+
 
 
 if __name__ == "__main__":
@@ -234,7 +330,7 @@ if __name__ == "__main__":
       sys.exit( 1 )
     print "Token was revoked"
   print "Cleaning expired tokens"
-  result = credDB.cleanExpiredTokens()
+  result = credDB.cleanExpired()
   if not result[ 'OK' ]:
     print "[ERR] %s" % result['Message']
     sys.exit( 1 )
@@ -246,7 +342,7 @@ if __name__ == "__main__":
   print "Sleeping 2 sec"
   time.sleep( 2 )
   print "Cleaning expired tokens"
-  result = credDB.cleanExpiredTokens()
+  result = credDB.cleanExpired()
   if not result[ 'OK' ]:
     print "[ERR] %s" % result['Message']
     sys.exit( 1 )
@@ -254,4 +350,32 @@ if __name__ == "__main__":
     print "[ERR] No tokens were cleaned"
     sys.exit( 1 )
   print "%s tokens were cleaned" % result[ 'Value' ]
+  print "Generating tokens"
+  for tType in credDB.VALID_OAUTH_TOKEN_TYPES:
+    print "Trying token type: %s" % tType
+    result = credDB.generateToken( userDN, userGroup, consumerKey, tokenType = tType, lifeTime = 3 )
+    if not result[ 'OK' ]:
+      print "[ERR] %s" % result['Message']
+      sys.exit( 1 )
+  print "Retrieving tokens"
+  print credDB.getTokens()
+  print "Requesting verifier"
+  result = credDB.generateVerifier( userDN, userGroup, consumerKey )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    sys.exit( 1 )
+  verifier = result[ 'Value' ]
+  print "Trying to validate with different consumer"
+  result = credDB.validateVerifier( userDN, userGroup, "ASD%s" % consumerKey, verifier )
+  if not result[ 'OK' ]:
+    print "Not validated with: %s" % result[ 'Message' ]
+  else:
+    print "[ERR] Validated invalid verifier"
+    sys.exit( 1 )
+  print "Validating it"
+  result = credDB.validateVerifier( userDN, userGroup, consumerKey, verifier )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    sys.exit( 1 )
+  print "ALL OK"
 

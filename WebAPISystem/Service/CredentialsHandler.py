@@ -37,11 +37,30 @@ class CredentialsHandler( RequestHandler ):
         return self.__credDB.revokeToken( token )
     return self.__credDB.revokeToken( credDict[ 'DN' ], credDict[ 'group' ], token )
 
-  auth_cleanExpiredTokens = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_cleanExpiredTokens = []
-  def export_cleanExpiredTokens( self ):
-    return self.__credDB.cleanExpiredTokens()
+  auth_cleanExpired = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_cleanExpired = []
+  def export_cleanExpired( self, minLifeTime = 0 ):
+    try:
+      minLifeTime = max( 0, int( minLifeTime ) )
+    except ValueError:
+      return S_ERROR( "Minimun life time has to be an integer " )
+    return self.__credDB.cleanExpired( minLifeTime )
 
+  auth_getTokens = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getTokens = [ types.DictType ]
+  def export_getTokens( self, condDict ):
+    return self.__credDB.getTokens( condDict )
+
+  auth_generateVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_generateVerifier = ( types.StringType, types.StringType, types.StringType,
+                             ( types.IntType, types.LongType ) )
+  def export_generateVerifier( self, userDN, userGroup, consumerKey, lifeTime ):
+    return self.__credDB.generateVerifier( userDN, userGroup, consumerKey, lifeTime )
+
+  auth_validateVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_validateVerifier = ( types.StringType, types.StringType, types.StringType, types.StringType )
+  def export_validateVerifier( self, userDN, userGroup, consumerKey, verifier ):
+    return self.__credDB.validateVerifier( userDN, userGroup, consumerKey, verifier )
 
 
 
