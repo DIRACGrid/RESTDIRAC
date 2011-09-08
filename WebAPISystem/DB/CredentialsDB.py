@@ -41,6 +41,7 @@ class CredentialsDB( DB ):
     if 'CredDB_OATokens' not in tablesInDB:
       tablesD[ 'CredDB_OATokens' ] = { 'Fields' : { 'Token' : 'CHAR(32) NOT NULL UNIQUE',
                                                     'Secret' : 'CHAR(32) NOT NULL',
+                                                    'ConsumerKey' : 'VARCHAR(64) NOT NULL',
                                                     'UserId' : 'INT UNSIGNED NOT NULL',
                                                     'ExpirationTime' : 'DATETIME',
                                                     'Type' : 'ENUM ("%s") NOT NULL' % '","'.join( self.VALID_OAUTH_TOKEN_TYPES ),
@@ -83,7 +84,7 @@ class CredentialsDB( DB ):
       return S_OK( result['lastRowId'] )
     return self.__getIdentityId( userDN, userGroup, autoInsert = False )
 
-  def generateToken( self, userDN, userGroup, lifeTime = 86400, tokenType = "request" ):
+  def generateToken( self, userDN, userGroup, consumerKey, tokenType = "request", lifeTime = 86400 ):
     result = self.getIdentityId( userDN, userGroup )
     if not result[ 'OK' ]:
       self.logger.error( result[ 'Value' ] )
@@ -95,28 +96,35 @@ class CredentialsDB( DB ):
       return S_ERROR( "Life time has to be a positive integer" )
     if lifeTime < 0:
       return S_ERROR( "Life time has to be a positive integer" )
-    return self.__generateToken( userId, lifeTime, tokenType )
+    return self.__generateToken( userId, consumerKey, tokenType, lifeTime )
 
 
-  def __generateToken( self, userId, lifeTime, tokenType, retries = 5 ):
+  def __generateToken( self, userId, consumerKey, tokenType, lifeTime, retries = 5 ):
     tokenType = tokenType.lower()
     if tokenType not in self.VALID_OAUTH_TOKEN_TYPES:
       return S_ERROR( "Invalid token type" )
     sqlType = '"%s"' % tokenType
-    token = md5.md5( "%s|%s|%s|%s" % ( userId, type, time.time(), random.random() ) ).hexdigest()
-    secret = md5.md5( "%s|%s|%s" % ( userId, time.time(), random.random() ) ).hexdigest()
-    sqlFields = "( Token, Secret, UserId, ExpirationTime, Type )"
-    sqlValues = [ "'%s'" % token, "'%s'" % secret, "%d" % userId,
+    token = md5.md5( "%s|%s|%s|%s|%s" % ( userId, type, consumerKey, time.time(), random.random() ) ).hexdigest()
+    secret = md5.md5( "%s|%s|%s\%s" % ( userId, consumerKey, time.time(), random.random() ) ).hexdigest()
+    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+      return S_ERROR( "Consumer key doesn't have a correct size" )
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+
+    sqlFields = "( Token, Secret, ConsumerKey, UserId, ExpirationTime, Type )"
+    sqlValues = [ "'%s'" % token, "'%s'" % secret, sqlConsumerKey, "%d" % userId,
                  "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime, sqlType ]
     sqlIn = "INSERT INTO `CredDB_OATokens` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
     result = self._update( sqlIn )
     if not result[ 'OK' ]:
       if result[ 'Message' ].find( "Duplicate key" ) > -1 and retries > 0 :
-        return self.__generateToken( userId, lifeTime, tokenType, retries - 1 )
+        return self.__generateToken( userId, consumerKey, tokenType, lifeTime, retries - 1 )
       return result
     return S_OK( ( token, secret ) )
 
-  def getSecret( self, userDN, userGroup, token, tokenType = "request" ):
+  def getSecret( self, userDN, userGroup, consumerKey, token, tokenType = "request" ):
     result = self.getIdentityId( userDN, userGroup )
     if not result[ 'OK' ]:
       self.logger.error( result[ 'Value' ] )
@@ -134,9 +142,16 @@ class CredentialsDB( DB ):
       return result
     sqlToken = result[ 'Value' ]
 
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+
     sqlCond = [ "UserId = %d" % userId ]
     sqlCond.append( "Token=%s" % sqlToken )
     sqlCond.append( "Type=%s" % sqlType )
+    sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
     sqlCond.append( "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" )
     sqlSel = "SELECT Secret FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
     result = self._query( sqlSel )
@@ -147,13 +162,28 @@ class CredentialsDB( DB ):
       return S_OK( data[0][0] )
     return S_ERROR( "Token is either unknown or invalid" )
 
-  def revokeToken( self, token ):
+  def revokeUserToken( self, userDN, userGroup, token ):
+    result = self.getIdentityId( userDN, userGroup )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    userId = result[ 'Value' ]
+    return self.revokeToken( token, userId )
+
+  def revokeToken( self, token, userId = -1 ):
     result = self._escapeString( token )
     if not result[ 'OK' ]:
       self.logger.error( result[ 'Value' ] )
       return result
     sqlToken = result[ 'Value' ]
-    sqlDel = "DELETE FROM `CredDB_OATokens` WHERE Token=%s" % sqlToken
+    sqlCond = [ "Token=%s" % sqlToken ]
+    try:
+      userId = int( userId )
+    except ValueError:
+      return S_ERROR( "userId has to be an integer" )
+    if userId > -1:
+      sqlCond.append( "userId = %d" % userId )
+    sqlDel = "DELETE FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
     return self._update( sqlDel )
 
   def cleanExpiredTokens( self, minLifeTime = 0 ):
@@ -169,24 +199,33 @@ if __name__ == "__main__":
   credDB = CredentialsDB()
   userDN = "/me"
   userGroup = "mygroup"
+  consumerKey = "ASDAS"
   print credDB.getIdentityId( userDN, userGroup )
   print credDB.getIdentityId( userDN, userGroup )
   for tType in credDB.VALID_OAUTH_TOKEN_TYPES:
     print "Trying token type: %s" % tType
-    result = credDB.generateToken( userDN, userGroup, tokenType = tType )
+    result = credDB.generateToken( userDN, userGroup, consumerKey, tokenType = tType )
     if not result[ 'OK' ]:
       print "[ERR] %s" % result['Message']
       sys.exit( 1 )
     tokenPair = result[ 'Value' ]
-    result = credDB.getSecret( userDN, userGroup, tokenPair[0], tokenType = tType )
+    result = credDB.getSecret( userDN, userGroup, consumerKey, tokenPair[0], tokenType = tType )
     if not result[ 'OK' ]:
       print "[ERR] %s" % result['Message']
       sys.exit( 1 )
     secret = result[ 'Value' ]
     if secret != tokenPair[1]:
       print "[ERR] SECRET IS DIFFERENT!!"
-    print "Token is OK. Revoking token..."
-    result = credDB.revokeToken( tokenPair[0] )
+    print "Token is OK. Revoking token with wrong user..."
+    result = credDB.revokeUserToken( "no", "no", tokenPair[0] )
+    if not result[ 'OK' ]:
+      print "[ERR] %s" % result['Message']
+      sys.exit( 1 )
+    if result[ 'Value' ] != 0:
+      print "[ERR] %d tokens were revoked" % result[ 'Value' ]
+      sys.exit( 1 )
+    print "Revoking token with user"
+    result = credDB.revokeUserToken( userDN, userGroup, tokenPair[0] )
     if not result[ 'OK' ]:
       print "[ERR] %s" % result['Message']
       sys.exit( 1 )
@@ -197,10 +236,10 @@ if __name__ == "__main__":
   print "Cleaning expired tokens"
   result = credDB.cleanExpiredTokens()
   if not result[ 'OK' ]:
-      print "[ERR] %s" % result['Message']
-      sys.exit( 1 )
+    print "[ERR] %s" % result['Message']
+    sys.exit( 1 )
   print "Generating 1 sec lifetime token"
-  result = credDB.generateToken( userDN, userGroup, tokenType = tType, lifeTime = 1 )
+  result = credDB.generateToken( userDN, userGroup, consumerKey, tokenType = tType, lifeTime = 1 )
   if not result[ 'OK' ]:
     print "[ERR] %s" % result['Message']
     sys.exit( 1 )
@@ -212,7 +251,7 @@ if __name__ == "__main__":
     print "[ERR] %s" % result['Message']
     sys.exit( 1 )
   if result[ 'Value' ] < 1:
-      print "[ERR] No tokens were cleaned"
-      sys.exit( 1 )
+    print "[ERR] No tokens were cleaned"
+    sys.exit( 1 )
   print "%s tokens were cleaned" % result[ 'Value' ]
 
