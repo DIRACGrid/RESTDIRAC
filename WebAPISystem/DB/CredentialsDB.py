@@ -291,7 +291,7 @@ class CredentialsDB( DB ):
 
 
 
-if __name__ == "__main__":
+def testDB():
   credDB = CredentialsDB()
   userDN = "/me"
   userGroup = "mygroup"
@@ -379,3 +379,5 @@ if __name__ == "__main__":
     sys.exit( 1 )
   print "ALL OK"
 
+if __name__ == "__main__":
+  testDB()
