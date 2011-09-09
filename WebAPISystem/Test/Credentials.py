@@ -4,6 +4,10 @@ import time
 from WebAPIDIRAC.WebAPISystem.DB.CredentialsDB import CredentialsDB
 from WebAPIDIRAC.WebAPISystem.Client.CredentialsClient import CredentialsClient
 
+def checkRes( result ):
+  if not result[ 'OK' ]:
+    raise RuntimeError( result[ 'Message' ] )
+  return result[ 'Value' ]
 
 def testCredObj( credClient ):
   userDN = "/dummyDB"
@@ -15,122 +19,81 @@ def testCredObj( credClient ):
   if not result[ 'OK' ]:
     print "Creating consumer"
     result = credClient.generateConsumerPair( consumerKey )
-    if not result[ 'OK' ]:
-      print "[ERR] %s" % result[ 'Message' ]
-      return False
-    consumerSecret = result[ 'Value' ]
+    consumerSecret = checkRes( result )[1]
   consumerSecret = result[ 'Value' ][1]
+  print " -- Testing Requests"
+  print "Generating request"
+  requestPair = checkRes( credClient.generateRequest( consumerKey ) )
+  print "Verifying request"
+  secret = checkRes( credClient.getRequestSecret( consumerKey, requestPair[0] ) )
+  if secret != requestPair[1]:
+    raise RuntimeError( "Request secrets are different" )
+  print "Deleting request"
+  if 1 != checkRes( credClient.deleteRequest( requestPair[0] ) ):
+    raise RuntimeError( "Didn't delete the request" )
   print " -- Testing tokens"
-  result = credClient.generateToken( userDN, userGroup, consumerKey )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  tokenPair = result[ 'Value' ]
-  result = credClient.getTokenSecret( userDN, userGroup, consumerKey, tokenPair[0] )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  secret = result[ 'Value' ]
-  if secret != tokenPair[1]:
-    print "[ERR] SECRET IS DIFFERENT!!"
+  print "Generating a new request"
+  request = checkRes( credClient.generateRequest( consumerKey ) )[0]
+  tokenPair = checkRes( credClient.generateToken( userDN, userGroup, consumerKey, request ) )
+  if tokenPair[1] != checkRes( credClient.getTokenSecret( userDN, userGroup, consumerKey, tokenPair[0] ) ):
+    raise RuntimeError( "SECRET IS DIFFERENT!!" )
   print "Token is OK. Revoking token with wrong user..."
-  result = credClient.revokeUserToken( "no", "no", tokenPair[0] )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  if result[ 'Value' ] != 0:
-    print "[ERR] %d tokens were revoked" % result[ 'Value' ]
-    return False
+  revoked = checkRes( credClient.revokeUserToken( "no", "no", tokenPair[0] ) )
+  if 0 != revoked:
+    raise RuntimeError( "%d tokens were revoked" % revoked )
   print "Revoking token with user"
-  result = credClient.revokeUserToken( userDN, userGroup, tokenPair[0] )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  if result[ 'Value' ] != 1:
-    print "[ERR] %d tokens were revoked" % result[ 'Value' ]
-    return False
+  revoked = checkRes( credClient.revokeUserToken( userDN, userGroup, tokenPair[0] ) )
+  if 1 != revoked:
+    raise RuntimeError( "%d tokens were revoked" % revoked )
   print "Token was revoked"
   print " -- Testing cleaning"
   print "Cleaning expired tokens"
-  result = credClient.cleanExpired()
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
+  checkRes( credClient.cleanExpired() )
   print "Generating 1 sec lifetime token"
-  result = credClient.generateToken( userDN, userGroup, consumerKey, lifeTime = 1 )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
+  request = checkRes( credClient.generateRequest( consumerKey ) )[0]
+  checkRes( credClient.generateToken( userDN, userGroup, consumerKey, request, lifeTime = 1 ) )
   print "Sleeping 2 sec"
   time.sleep( 2 )
   print "Cleaning expired tokens"
-  result = credClient.cleanExpired()
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  if result[ 'Value' ] < 1:
-    print "[ERR] No tokens were cleaned"
-    return False
-  print "%s tokens were cleaned" % result[ 'Value' ]
+  cleaned = checkRes( credClient.cleanExpired() )
+  if cleaned == 0:
+    raise RuntimeError( "No tokens were cleaned" )
+  print "%s tokens were cleaned" % cleaned
   print " -- Testing Verifiers"
   print "Requesting verifier"
-  result = credClient.generateVerifier( userDN, userGroup, consumerKey )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  verifier = result[ 'Value' ]
+  verifier = checkRes( credClient.generateVerifier( userDN, userGroup, consumerKey ) )
   print "Trying to validate with different consumer"
   result = credClient.validateVerifier( userDN, userGroup, "ASD%s" % consumerKey, verifier )
-  if not result[ 'OK' ]:
-    print "Not validated with: %s" % result[ 'Message' ]
+  if result[ 'OK' ]:
+    raise RuntimeError( "Validated invalid verifier" )
   else:
-    print "[ERR] Validated invalid verifier"
-    return False
+    print "Not validated with: %s" % result[ 'Message' ]
   print "Validating it"
-  result = credClient.validateVerifier( userDN, userGroup, consumerKey, verifier )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
+  checkRes( credClient.validateVerifier( userDN, userGroup, consumerKey, verifier ) )
   print " -- Testing consumers"
   print "Getting token"
-  result = credClient.generateToken( userDN, userGroup, consumerKey )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  tokenPair = result[ 'Value' ]
+  request = checkRes( credClient.generateRequest( consumerKey ) )[0]
+  tokenPair = checkRes( credClient.generateToken( userDN, userGroup, consumerKey, request ) )
   print "Requesting verifier"
-  result = credClient.generateVerifier( userDN, userGroup, consumerKey )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  verifier = result[ 'Value' ]
+  verifier = checkRes( credClient.generateVerifier( userDN, userGroup, consumerKey ) )
   print "Deleting consumer"
-  result = credClient.deleteConsumer( consumerKey )
-  if not result[ 'OK' ]:
-    print "[ERR] %s" % result['Message']
-    return False
-  if result[ 'Value' ] < 3:
-    print "[ERR] Deleted less than three objects: %d" % result['Value']
-    return False
-  print "%d objects were deleted" % result[ 'Value' ]
+  cleaned = checkRes( credClient.deleteConsumer( consumerKey ) )
+  if cleaned < 3:
+    raise RuntimeError( "Deleted less than three objects: %d" % cleaned )
+  print "%d objects were deleted" % cleaned
   print "Trying to retrieve token"
   result = credClient.getTokenSecret( userDN, userGroup, consumerKey, tokenPair[0] )
   if result[ 'OK' ]:
-    print "[ERR] Token could be retrieved!", result[ 'Value' ]
-    return False
+    raise RuntimeError( "Token could be retrieved!" )
   print "Token was deleted :)"
   print "Trying to retrieve verifier"
   result = credClient.validateVerifier( userDN, userGroup, consumerKey, verifier )
   if result[ 'OK' ]:
-    print "[ERR] Verifier could be retrieved!"
-    return False
+    raise RuntimeError( "Verifier could be retrieved!" )
   print "Verifier was deleted :)"
   print "ALL OK"
-  return True
 
 if __name__ == "__main__":
   for credObj in ( CredentialsDB(), CredentialsClient() ):
     print "====== TESTING %s ======" % credObj
-    if not testCredObj( credObj ):
-      print "EXITING"
-      sys.exit( 1 )
+    testCredObj( credObj )

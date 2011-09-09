@@ -5,6 +5,7 @@ from DIRAC.Core.Utilities.DictCache import DictCache
 class CredentialsClient:
 
   CONSUMER_GRACE_TIME = 3600
+  REQUEST_GRACE_TIME = 900
 
   def __init__( self, RPCFunctor = None ):
     if not RPCFunctor:
@@ -13,6 +14,7 @@ class CredentialsClient:
       self.__RPCFunctor = RPCFunctor
     self.__tokens = DictCache()
     self.__consumers = DictCache()
+    self.__requests = DictCache()
 
   def __cleanReturn( self, result ):
     if 'rpcStub' in result:
@@ -22,8 +24,8 @@ class CredentialsClient:
   def __getRPC( self ):
     return self.__RPCFunctor( "WebAPI/Credentials" )
 
-  def generateToken( self, userDN, userGroup, consumerKey, lifeTime = 86400 ):
-    result = self.__getRPC().generateToken( userDN, userGroup, consumerKey, lifeTime )
+  def generateToken( self, userDN, userGroup, consumerKey, request, lifeTime = 86400 ):
+    result = self.__getRPC().generateToken( userDN, userGroup, consumerKey, request, lifeTime )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
     tokenPair = result[ 'Value' ]
@@ -130,6 +132,10 @@ class CredentialsClient:
       for cKey in cKeys:
         if cKey[2] == consumerKey:
           self.__tokens.delete( cKey )
+      cKeys = self.__requests.getKeys()
+      for cKey in cKeys:
+        if cKey[0] == consumerKey:
+          self.__requests.delete( cKey )
     return self.__cleanReturn( result )
 
   def getAllConsumers( self ):
@@ -139,5 +145,35 @@ class CredentialsClient:
     for record in result[ 'Value' ]:
       self.__consumers.add( record[0], self.CONSUMER_GRACE_TIME, record[1] )
     return self.__cleanReturn( result )
+
+  def generateRequest( self, consumerKey ):
+    result = self.__getRPC().generateRequest( consumerKey )
+    if not result[ 'OK' ]:
+      return self.__cleanReturn( result )
+    requestPair = result[ 'Value' ]
+    self.__requests.add( ( consumerKey, requestPair[0] ), self.REQUEST_GRACE_TIME, requestPair[1] )
+    return self.__cleanReturn( result )
+
+  def getRequestSecret( self, consumerKey, request ):
+    cKey = ( consumerKey, request )
+    secret = self.__requests.get( cKey )
+    if secret:
+      return S_OK( secret )
+    result = self.__getRPC().getRequestSecret( consumerKey, request )
+    if not result[ 'OK' ]:
+      return self.__cleanReturn( result )
+    self.__tokens.add( cKey, result[ 'lifeTime' ] - 5, result[ 'Value' ] )
+    return self.__cleanReturn( result )
+
+  def deleteRequest( self, request ):
+    result = self.__getRPC().deleteRequest( request )
+    if not result[ 'OK' ]:
+      return self.__cleanReturn( result )
+    cKeys = self.__requests.getKeys()
+    for cKey in cKeys:
+      if cKey[1] == request:
+        self.__requests.delete( cKey )
+    return self.__cleanReturn( result )
+
 
 

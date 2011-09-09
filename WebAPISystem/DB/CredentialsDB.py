@@ -49,15 +49,15 @@ class CredentialsDB( DB ):
                                       'Indexes' : { 'Expiration' : [ 'ExpirationTime' ] }
                                     }
 
-    if 'CredDB_Requests' not in tablesInDB:
-      tablesD[ 'CredDB_Requests' ] = { 'Fields' : { 'Token' : 'CHAR(32) NOT NULL UNIQUE',
-                                                    'Secret' : 'CHAR(32) NOT NULL',
-                                                    'ConsumerKey' : 'VARCHAR(64) NOT NULL',
-                                                    'ExpirationTime' : 'DATETIME',
+    if 'CredDB_OARequests' not in tablesInDB:
+      tablesD[ 'CredDB_OARequests' ] = { 'Fields' : { 'Request' : 'CHAR(32) NOT NULL UNIQUE',
+                                                      'Secret' : 'CHAR(32) NOT NULL',
+                                                      'ConsumerKey' : 'VARCHAR(64) NOT NULL',
+                                                      'ExpirationTime' : 'DATETIME',
                                                 },
-                                      'PrimaryKey' : 'Token',
-                                      'Indexes' : { 'Expiration' : [ 'ExpirationTime' ] }
-                                    }
+                                        'PrimaryKey' : 'Request',
+                                        'Indexes' : { 'Expiration' : [ 'ExpirationTime' ] }
+                                      }
 
     if 'CredDB_Identities' not in tablesInDB:
       tablesD[ 'CredDB_Identities' ] = { 'Fields' : { 'Id' : 'INT UNSIGNED AUTO_INCREMENT NOT NULL',
@@ -109,8 +109,8 @@ class CredentialsDB( DB ):
       return S_OK( result['lastRowId'] )
     return self.__getIdentityId( userDN, userGroup, autoInsert = False )
 
-  def generateToken( self, userDN, userGroup, consumerKey, lifeTime = 86400 ):
-    result = self.getConsumerSecret( consumerKey )
+  def generateToken( self, userDN, userGroup, consumerKey, request, lifeTime = 86400 ):
+    result = self.getRequestSecret( consumerKey, request )
     if not result[ 'OK' ]:
       return result
     result = self.getIdentityId( userDN, userGroup )
@@ -124,7 +124,11 @@ class CredentialsDB( DB ):
       return S_ERROR( "Life time has to be a positive integer" )
     if lifeTime < 0:
       return S_ERROR( "Life time has to be a positive integer" )
-    return self.__generateToken( userId, consumerKey, lifeTime )
+    result = self.__generateToken( userId, consumerKey, lifeTime )
+    if not result[ 'OK' ]:
+      return result
+    self.deleteRequest( request )
+    return result
 
 
   def __generateToken( self, userId, consumerKey, lifeTime, retries = 5 ):
@@ -234,6 +238,68 @@ class CredentialsDB( DB ):
       sqlCond.append( "userId = %d" % userId )
     sqlDel = "DELETE FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
     return self._update( sqlDel )
+
+  def generateRequest( self, consumerKey, lifeTime = 900 ):
+    result = self.getConsumerSecret( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    return self.__generateRequest( consumerKey, lifeTime )
+
+  def __generateRequest( self, consumerKey, lifeTime, retries = 5 ):
+    request = md5.md5( "%s|%s|%s" % ( consumerKey, time.time(), random.random() ) ).hexdigest()
+    secret = md5.md5( "%s|%s|%s" % ( request, time.time(), random.random() ) ).hexdigest()
+    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+      return S_ERROR( "Consumer key doesn't have a correct size" )
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+
+    sqlFields = "( Request, Secret, ConsumerKey, ExpirationTime )"
+    sqlValues = [ "'%s'" % request, "'%s'" % secret, sqlConsumerKey,
+                 "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime ]
+    sqlIn = "INSERT INTO `CredDB_OARequests` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
+    result = self._update( sqlIn )
+    if not result[ 'OK' ]:
+      if result[ 'Message' ].find( "Duplicate key" ) > -1 and retries > 0 :
+        return self.__generateRequest( consumerKey, retries - 1 )
+      return result
+    return S_OK( ( request, secret ) )
+
+  def getRequestSecret( self, consumerKey, request ):
+
+    result = self._escapeString( request )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    sqlRequest = result[ 'Value' ]
+
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+
+    sqlCond = [ "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" ]
+    sqlCond.append( "Request=%s" % sqlRequest )
+    sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
+    sqlSel = "SELECT Secret, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) FROM `CredDB_OARequests` WHERE %s" % " AND ".join( sqlCond )
+    result = self._query( sqlSel )
+    if not result[ 'OK' ]:
+      return result
+    data = result[ 'Value' ]
+    if len( data ) and len( data[0] ):
+      result = S_OK( data[0][0] )
+      result[ 'lifeTime' ] = data[0][1]
+      return result
+    return S_ERROR( "Request is either unknown or invalid" )
+
+  def deleteRequest( self, request ):
+    result = self._escapeString( request )
+    if not result[ 'OK' ]:
+      return result
+    sqlCmd = "DELETE FROM `CredDB_OARequests` WHERE Request=%s" % result[ 'Value' ]
+    return self._update( sqlCmd )
 
   def cleanExpired( self, minLifeTime = 0 ):
     try:
