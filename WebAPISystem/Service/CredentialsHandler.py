@@ -2,7 +2,7 @@ import types
 from DIRAC import S_OK, S_ERROR
 from DIRAC.Core.DISET.RequestHandler import RequestHandler
 from DIRAC.Core.Security import Properties
-from OAuthDIRAC.WebAPISystem.DB.CredentialsDB import CredentialsDB
+from WebAPIDIRAC.WebAPISystem.DB.CredentialsDB import CredentialsDB
 
 class CredentialsHandler( RequestHandler ):
 

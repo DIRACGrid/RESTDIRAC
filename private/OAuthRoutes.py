@@ -2,7 +2,7 @@ import bottle
 import oauth2
 import urlparse
 from DIRAC import S_OK, S_ERROR, gLogger
-from OAuthDIRAC.private.OAuthDataStore import OAuthDataStore
+from WebAPIDIRAC.private.OAuthDataStore import OAuthDataStore
 
 gOADataStore = OAuthDataStore()
 

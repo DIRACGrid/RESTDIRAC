@@ -1,5 +1,5 @@
 import bottle
-from OAuthDIRAC.private import OAuthRoutes, Credentials
+from WebAPIDIRAC.private import OAuthRoutes, Credentials
 from DIRAC.Core.Base import Script
 
 def runServer():

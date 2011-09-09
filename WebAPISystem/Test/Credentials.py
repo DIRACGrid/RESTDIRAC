@@ -1,6 +1,6 @@
 
-from OAuthDIRAC.WebAPISystem.Credentials.CredentialsDB import testDB
-from OAuthDIRAC.WebAPISystem.Client.CredentialsClient import CredentialsClient
+from WebAPIDIRAC.WebAPISystem.Credentials.CredentialsDB import testDB
+from WebAPIDIRAC.WebAPISystem.Client.CredentialsClient import CredentialsClient
 
 credDB = CredentialsClient()
 
