@@ -21,44 +21,43 @@ def testCredObj( credClient ):
     consumerSecret = result[ 'Value' ]
   consumerSecret = result[ 'Value' ][1]
   print " -- Testing tokens"
-  for tType in ( "request", "access" ):
-    print "Trying token type: %s" % tType
-    result = credClient.generateToken( userDN, userGroup, consumerKey, tokenType = tType )
-    if not result[ 'OK' ]:
-      print "[ERR] %s" % result['Message']
-      return False
-    tokenPair = result[ 'Value' ]
-    result = credClient.getSecret( userDN, userGroup, consumerKey, tokenPair[0], tokenType = tType )
-    if not result[ 'OK' ]:
-      print "[ERR] %s" % result['Message']
-      return False
-    secret = result[ 'Value' ]
-    if secret != tokenPair[1]:
-      print "[ERR] SECRET IS DIFFERENT!!"
-    print "Token is OK. Revoking token with wrong user..."
-    result = credClient.revokeUserToken( "no", "no", tokenPair[0] )
-    if not result[ 'OK' ]:
-      print "[ERR] %s" % result['Message']
-      return False
-    if result[ 'Value' ] != 0:
-      print "[ERR] %d tokens were revoked" % result[ 'Value' ]
-      return False
-    print "Revoking token with user"
-    result = credClient.revokeUserToken( userDN, userGroup, tokenPair[0] )
-    if not result[ 'OK' ]:
-      print "[ERR] %s" % result['Message']
-      return False
-    if result[ 'Value' ] != 1:
-      print "[ERR] %d tokens were revoked" % result[ 'Value' ]
-      return False
-    print "Token was revoked"
+  result = credClient.generateToken( userDN, userGroup, consumerKey )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    return False
+  tokenPair = result[ 'Value' ]
+  result = credClient.getSecret( userDN, userGroup, consumerKey, tokenPair[0] )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    return False
+  secret = result[ 'Value' ]
+  if secret != tokenPair[1]:
+    print "[ERR] SECRET IS DIFFERENT!!"
+  print "Token is OK. Revoking token with wrong user..."
+  result = credClient.revokeUserToken( "no", "no", tokenPair[0] )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    return False
+  if result[ 'Value' ] != 0:
+    print "[ERR] %d tokens were revoked" % result[ 'Value' ]
+    return False
+  print "Revoking token with user"
+  result = credClient.revokeUserToken( userDN, userGroup, tokenPair[0] )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    return False
+  if result[ 'Value' ] != 1:
+    print "[ERR] %d tokens were revoked" % result[ 'Value' ]
+    return False
+  print "Token was revoked"
+  print " -- Testing cleaning"
   print "Cleaning expired tokens"
   result = credClient.cleanExpired()
   if not result[ 'OK' ]:
     print "[ERR] %s" % result['Message']
     return False
   print "Generating 1 sec lifetime token"
-  result = credClient.generateToken( userDN, userGroup, consumerKey, tokenType = tType, lifeTime = 1 )
+  result = credClient.generateToken( userDN, userGroup, consumerKey, lifeTime = 1 )
   if not result[ 'OK' ]:
     print "[ERR] %s" % result['Message']
     return False
@@ -94,7 +93,7 @@ def testCredObj( credClient ):
     return False
   print " -- Testing consumers"
   print "Getting token"
-  result = credClient.generateToken( userDN, userGroup, consumerKey, tokenType = "request" )
+  result = credClient.generateToken( userDN, userGroup, consumerKey )
   if not result[ 'OK' ]:
     print "[ERR] %s" % result['Message']
     return False
@@ -115,7 +114,7 @@ def testCredObj( credClient ):
     return False
   print "%d objects were deleted" % result[ 'Value' ]
   print "Trying to retrieve token"
-  result = credClient.getSecret( userDN, userGroup, consumerKey, tokenPair[0], tokenType = "request" )
+  result = credClient.getSecret( userDN, userGroup, consumerKey, tokenPair[0] )
   if result[ 'OK' ]:
     print "[ERR] Token could be retrieved!", result[ 'Value' ]
     return False

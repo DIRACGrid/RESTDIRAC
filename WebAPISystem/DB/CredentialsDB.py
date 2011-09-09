@@ -44,7 +44,16 @@ class CredentialsDB( DB ):
                                                     'ConsumerKey' : 'VARCHAR(64) NOT NULL',
                                                     'UserId' : 'INT UNSIGNED NOT NULL',
                                                     'ExpirationTime' : 'DATETIME',
-                                                    'Type' : 'ENUM ("%s") NOT NULL' % '","'.join( self.VALID_OAUTH_TOKEN_TYPES ),
+                                                },
+                                      'PrimaryKey' : 'Token',
+                                      'Indexes' : { 'Expiration' : [ 'ExpirationTime' ] }
+                                    }
+
+    if 'CredDB_Requests' not in tablesInDB:
+      tablesD[ 'CredDB_Requests' ] = { 'Fields' : { 'Token' : 'CHAR(32) NOT NULL UNIQUE',
+                                                    'Secret' : 'CHAR(32) NOT NULL',
+                                                    'ConsumerKey' : 'VARCHAR(64) NOT NULL',
+                                                    'ExpirationTime' : 'DATETIME',
                                                 },
                                       'PrimaryKey' : 'Token',
                                       'Indexes' : { 'Expiration' : [ 'ExpirationTime' ] }
@@ -100,7 +109,7 @@ class CredentialsDB( DB ):
       return S_OK( result['lastRowId'] )
     return self.__getIdentityId( userDN, userGroup, autoInsert = False )
 
-  def generateToken( self, userDN, userGroup, consumerKey, tokenType = "request", lifeTime = 86400 ):
+  def generateToken( self, userDN, userGroup, consumerKey, lifeTime = 86400 ):
     result = self.getConsumerSecret( consumerKey )
     if not result[ 'OK' ]:
       return result
@@ -115,14 +124,10 @@ class CredentialsDB( DB ):
       return S_ERROR( "Life time has to be a positive integer" )
     if lifeTime < 0:
       return S_ERROR( "Life time has to be a positive integer" )
-    return self.__generateToken( userId, consumerKey, tokenType, lifeTime )
+    return self.__generateToken( userId, consumerKey, lifeTime )
 
 
-  def __generateToken( self, userId, consumerKey, tokenType, lifeTime, retries = 5 ):
-    tokenType = tokenType.lower()
-    if tokenType not in self.VALID_OAUTH_TOKEN_TYPES:
-      return S_ERROR( "Invalid token type" )
-    sqlType = '"%s"' % tokenType
+  def __generateToken( self, userId, consumerKey, lifeTime, retries = 5 ):
     token = md5.md5( "%s|%s|%s|%s|%s" % ( userId, type, consumerKey, time.time(), random.random() ) ).hexdigest()
     secret = md5.md5( "%s|%s|%s\%s" % ( userId, consumerKey, time.time(), random.random() ) ).hexdigest()
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
@@ -132,28 +137,23 @@ class CredentialsDB( DB ):
       return result
     sqlConsumerKey = result[ 'Value' ]
 
-    sqlFields = "( Token, Secret, ConsumerKey, UserId, ExpirationTime, Type )"
+    sqlFields = "( Token, Secret, ConsumerKey, UserId, ExpirationTime )"
     sqlValues = [ "'%s'" % token, "'%s'" % secret, sqlConsumerKey, "%d" % userId,
-                 "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime, sqlType ]
+                 "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime ]
     sqlIn = "INSERT INTO `CredDB_OATokens` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
     result = self._update( sqlIn )
     if not result[ 'OK' ]:
       if result[ 'Message' ].find( "Duplicate key" ) > -1 and retries > 0 :
-        return self.__generateToken( userId, consumerKey, tokenType, lifeTime, retries - 1 )
+        return self.__generateToken( userId, consumerKey, lifeTime, retries - 1 )
       return result
     return S_OK( ( token, secret ) )
 
-  def getSecret( self, userDN, userGroup, consumerKey, token, tokenType = "request" ):
+  def getSecret( self, userDN, userGroup, consumerKey, token ):
     result = self.getIdentityId( userDN, userGroup )
     if not result[ 'OK' ]:
       self.logger.error( result[ 'Value' ] )
       return result
     userId = result[ 'Value' ]
-
-    tokenType = tokenType.lower()
-    if tokenType not in self.VALID_OAUTH_TOKEN_TYPES:
-      return S_ERROR( "Invalid token type" )
-    sqlType = '"%s"' % tokenType
 
     result = self._escapeString( token )
     if not result[ 'OK' ]:
@@ -169,7 +169,6 @@ class CredentialsDB( DB ):
 
     sqlCond = [ "UserId = %d" % userId ]
     sqlCond.append( "Token=%s" % sqlToken )
-    sqlCond.append( "Type=%s" % sqlType )
     sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
     sqlCond.append( "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" )
     sqlSel = "SELECT Secret, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
@@ -187,7 +186,7 @@ class CredentialsDB( DB ):
     sqlTables = [ '`CredDB_OATokens` t', '`CredDB_Identities` i' ]
     sqlCond = [ "t.UserId = i.Id"]
 
-    fields = [ 'Token', 'Secret', 'ConsumerKey', 'Type', 'UserDN', 'UserGroup' ]
+    fields = [ 'Token', 'Secret', 'ConsumerKey', 'UserDN', 'UserGroup' ]
     sqlFields = []
     for field in fields:
       if field in ( 'UserDN', 'UserGroup' ):

@@ -12,16 +12,16 @@ class CredentialsHandler( RequestHandler ):
     return S_OK()
 
   auth_generateToken = [ Properties.TRUSTED_HOST ]
-  types_generateToken = ( types.StringType, types.StringType, types.StringType,
+  types_generateToken = ( types.StringType, types.StringType,
                           types.StringType, ( types.IntType, types.LongType ) )
-  def export_generateToken( self, userDN, userGroup, consumerKey, tokenType, lifeTime ):
-    return self.__credDB.generateToken( userDN, userGroup, consumerKey, tokenType, lifeTime )
+  def export_generateToken( self, userDN, userGroup, consumerKey, lifeTime ):
+    return self.__credDB.generateToken( userDN, userGroup, consumerKey, lifeTime )
 
   auth_getSecret = [ Properties.TRUSTED_HOST ]
-  types_getSecret = ( types.StringType, types.StringType, types.StringType,
+  types_getSecret = ( types.StringType, types.StringType,
                       types.StringType, types.StringType )
-  def export_getSecret( self, userDN, userGroup, consumerKey, token, tokenType ):
-    return self.__credDB.getSecret( userDN, userGroup, consumerKey, token, tokenType )
+  def export_getSecret( self, userDN, userGroup, consumerKey, token ):
+    return self.__credDB.getSecret( userDN, userGroup, consumerKey, token )
 
   auth_revokeUserToken = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_revokeUserToken = [ types.StringType, types.StringType, types.StringType ]

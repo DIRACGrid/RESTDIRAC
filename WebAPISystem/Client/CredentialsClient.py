@@ -22,21 +22,21 @@ class CredentialsClient:
   def __getRPC( self ):
     return self.__RPCFunctor( "WebAPI/Credentials" )
 
-  def generateToken( self, userDN, userGroup, consumerKey, tokenType, lifeTime = 86400 ):
-    result = self.__getRPC().generateToken( userDN, userGroup, consumerKey, tokenType, lifeTime )
+  def generateToken( self, userDN, userGroup, consumerKey, lifeTime = 86400 ):
+    result = self.__getRPC().generateToken( userDN, userGroup, consumerKey, lifeTime )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
     tokenPair = result[ 'Value' ]
-    cKey = ( userDN, userGroup, consumerKey, tokenPair[0], tokenType.lower() )
+    cKey = ( userDN, userGroup, consumerKey, tokenPair[0] )
     self.__tokens.add( cKey, lifeTime - 5, tokenPair[1] )
     return self.__cleanReturn( result )
 
-  def getSecret( self, userDN, userGroup, consumerKey, token, tokenType ):
-    cKey = ( userDN, userGroup, consumerKey, token, tokenType.lower() )
+  def getSecret( self, userDN, userGroup, consumerKey, token ):
+    cKey = ( userDN, userGroup, consumerKey, token )
     secret = self.__tokens.get( cKey )
     if secret:
       return S_OK( secret )
-    result = self.__getRPC().getSecret( userDN, userGroup, consumerKey, token, tokenType )
+    result = self.__getRPC().getSecret( userDN, userGroup, consumerKey, token )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
     self.__tokens.add( cKey, result[ 'lifeTime' ] - 5, result[ 'Value' ] )

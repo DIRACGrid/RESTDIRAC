@@ -2,16 +2,39 @@ import bottle
 import oauth2
 import urlparse
 from DIRAC import S_OK, S_ERROR, gLogger
-from WebAPIDIRAC.private.OAuthDataStore import OAuthDataStore
 
-gOADataStore = OAuthDataStore()
+from WebAPIDIRAC.WebAPISystem.private import OAuthHelper
 
-oaServer = oauth2.Server()
-oaServer.add_signature_method( oauth2.SignatureMethod_HMAC_SHA1() )
-oaServer.add_signature_method( oauth2.SignatureMethod_PLAINTEXT() )
-
-bottle.debug( True )
 bottle.app().catchall = False
+
+def getUserDN( environ ):
+  userDN = False
+  if 'HTTPS' not in environ or environ[ 'HTTPS' ] != 'on':
+    gLogger.info( "Getting the DN from /OAuth/DebugDN" )
+    userDN = gConfig.getValue( "/OAuth/DebugDN", "/yo" )
+  elif 'SSL_CLIENT_S_DN' in environ:
+    userDN = environ[ 'SSL_CLIENT_S_DN' ]
+  elif 'SSL_CLIENT_CERT' in environ:
+    userCert = X509Certificate.X509Certificate()
+    result = userCert.loadFromString( environ[ 'SSL_CLIENT_CERT' ] )
+    if not result[ 'OK' ]:
+      errMsg = "Could not load SSL_CLIENT_CERT: %s" % result[ 'Message' ]
+      gLogger.error( errMsg )
+      return S_ERROR( errMsg )
+    else:
+      userDN = userCert.getSubjectDN()[ 'Value' ]
+  else:
+    errMsg = "Web server is not properly configured to get SSL_CLIENT_S_DN or SSL_CLIENT_CERT in env"
+    gLogger.fatal( errMsg )
+    return S_ERROR( errMsg )
+
+  result = Registry.getUsernameForDN( userDN )
+  if not result[ 'OK' ]:
+    gLogger.info( "Could not get username for DN %s: %s" % ( userDN, result[ 'Message' ] ) )
+    return result
+  userName = result[ 'Value' ]
+  gLogger.info( "Got username for user" " => %s for %s" % ( userName, userDN ) )
+  return S_OK( ( userDN, userName ) )
 
 def getOARequest():
   request = bottle.request
@@ -26,47 +49,6 @@ def getOARequest():
                                            query_string = request.query_string )
   return oaRequest
 
-def checkRequest( oaRequest, checkRequestToken = False, checkAccessToken = False, checkVerifier = False ):
-  consumerKey = oaRequest[ 'oauth_consumer_key' ]
-  expectedSecret = gOADataStore.getConsumerSecret( consumerKey )
-  if not expectedSecret:
-    return S_ERROR( "Unknown consumer key" )
-  oaConsumer = oauth2.Consumer( consumerKey, expectedSecret )
-
-  oaData = {}
-  oaData[ 'consumer' ] = consumerKey
-
-  oaToken = False
-
-  if checkRequestToken or checkAccessToken:
-    if 'oauth_token' not in oaRequest:
-      return S_ERROR( "No token in request " )
-    tokenString = oaRequest[ 'oauth_token' ]
-    if checkRequestToken:
-      checkRequest = True
-      tokenType = "request"
-    else:
-      checkRequest = False
-      tokenType = "access"
-    expectedSecret = gOADataStore.getTokenSecret( consumerToken, tokenString, checkRequest )
-    if not expectedSecret:
-      return S_ERROR( "Unknown %s token" % tokenType )
-    oaToken = oauth2.Token( tokenString, expectedSecret )
-    oaData[ tokenType ] = tokenString
-
-  try:
-    oaServer.verify_request( oaRequest, oaConsumer, oaToken )
-  except oauth2.Error, e:
-    return S_ERROR( "Invalid request: %s" % e )
-
-  if checkVerifier:
-    if oaRequest['oauth_verifier'] != gOADataStore.getRequestVerifier( consumerToken, reqToken ):
-      return S_ERROR( "Invalid verifier" )
-    oaData[ 'verify' ] = oaRequest['oauth_verifier']
-
-  return S_OK( oaData )
-
-
 
 #Oauth flow
 @bottle.post( "/oauth/token/request" )
@@ -74,12 +56,12 @@ def checkRequest( oaRequest, checkRequestToken = False, checkAccessToken = False
 def oauthRequestToken():
   oaRequest = getOARequest()
 
-  result = checkRequest( oaRequest )
+  result = OAuthHelper.checkRequest( oaRequest )
   if not result[ 'OK' ]:
     gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
     bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
   oaData = result[ 'Value' ]
-  tokenPair = gOADataStore.generateTokenPair( oaData[ 'consumer' ], request = True )
+  tokenPair = OAuthHelper.generateTokenPair( oaData[ 'consumer' ], request = True )
   reqToken = oauth2.Token( tokenPair[0], tokenPair[1] )
   return reqToken.to_string()
 
