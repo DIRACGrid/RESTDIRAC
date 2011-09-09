@@ -17,11 +17,11 @@ class CredentialsHandler( RequestHandler ):
   def export_generateToken( self, userDN, userGroup, consumerKey, lifeTime ):
     return self.__credDB.generateToken( userDN, userGroup, consumerKey, lifeTime )
 
-  auth_getSecret = [ Properties.TRUSTED_HOST ]
-  types_getSecret = ( types.StringType, types.StringType,
+  auth_getTokenSecret = [ Properties.TRUSTED_HOST ]
+  types_getTokenSecret = ( types.StringType, types.StringType,
                       types.StringType, types.StringType )
-  def export_getSecret( self, userDN, userGroup, consumerKey, token ):
-    return self.__credDB.getSecret( userDN, userGroup, consumerKey, token )
+  def export_getTokenSecret( self, userDN, userGroup, consumerKey, token ):
+    return self.__credDB.getTokenSecret( userDN, userGroup, consumerKey, token )
 
   auth_revokeUserToken = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_revokeUserToken = [ types.StringType, types.StringType, types.StringType ]

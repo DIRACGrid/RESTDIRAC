@@ -31,12 +31,12 @@ class CredentialsClient:
     self.__tokens.add( cKey, lifeTime - 5, tokenPair[1] )
     return self.__cleanReturn( result )
 
-  def getSecret( self, userDN, userGroup, consumerKey, token ):
+  def getTokenSecret( self, userDN, userGroup, consumerKey, token ):
     cKey = ( userDN, userGroup, consumerKey, token )
     secret = self.__tokens.get( cKey )
     if secret:
       return S_OK( secret )
-    result = self.__getRPC().getSecret( userDN, userGroup, consumerKey, token )
+    result = self.__getRPC().getTokenSecret( userDN, userGroup, consumerKey, token )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
     self.__tokens.add( cKey, result[ 'lifeTime' ] - 5, result[ 'Value' ] )

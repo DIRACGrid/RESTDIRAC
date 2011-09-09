@@ -26,7 +26,7 @@ def testCredObj( credClient ):
     print "[ERR] %s" % result['Message']
     return False
   tokenPair = result[ 'Value' ]
-  result = credClient.getSecret( userDN, userGroup, consumerKey, tokenPair[0] )
+  result = credClient.getTokenSecret( userDN, userGroup, consumerKey, tokenPair[0] )
   if not result[ 'OK' ]:
     print "[ERR] %s" % result['Message']
     return False
@@ -114,7 +114,7 @@ def testCredObj( credClient ):
     return False
   print "%d objects were deleted" % result[ 'Value' ]
   print "Trying to retrieve token"
-  result = credClient.getSecret( userDN, userGroup, consumerKey, tokenPair[0] )
+  result = credClient.getTokenSecret( userDN, userGroup, consumerKey, tokenPair[0] )
   if result[ 'OK' ]:
     print "[ERR] Token could be retrieved!", result[ 'Value' ]
     return False

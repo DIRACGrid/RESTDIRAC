@@ -148,7 +148,7 @@ class CredentialsDB( DB ):
       return result
     return S_OK( ( token, secret ) )
 
-  def getSecret( self, userDN, userGroup, consumerKey, token ):
+  def getTokenSecret( self, userDN, userGroup, consumerKey, token ):
     result = self.getIdentityId( userDN, userGroup )
     if not result[ 'OK' ]:
       self.logger.error( result[ 'Value' ] )
