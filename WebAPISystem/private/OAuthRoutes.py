@@ -49,6 +49,7 @@ def getOARequest():
                                            query_string = request.query_string )
   return oaRequest
 
+oaHelper = OAuthHelper()
 
 #Oauth flow
 @bottle.post( "/oauth/token/request" )
@@ -56,12 +57,12 @@ def getOARequest():
 def oauthRequestToken():
   oaRequest = getOARequest()
 
-  result = OAuthHelper.checkRequest( oaRequest )
+  result = oaHelper.checkRequest( oaRequest )
   if not result[ 'OK' ]:
     gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
     bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
   oaData = result[ 'Value' ]
-  tokenPair = OAuthHelper.generateTokenPair( oaData[ 'consumer' ], request = True )
+  tokenPair = oaHelper.generateRequest( oaData[ 'consumer' ] )
   reqToken = oauth2.Token( tokenPair[0], tokenPair[1] )
   return reqToken.to_string()
 
@@ -70,27 +71,29 @@ def oauthRequestToken():
 def oauthAuthorizeToken():
   oaRequest = getOARequest()
 
-  result = checkRequest( oaRequest, checkRequestToken = True )
+  result = oaHelper.checkRequest( oaRequest, checkRequest = True )
   if not result[ 'OK' ]:
     gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
     bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
   oaData = result[ 'Value' ]
 
-  return gOADataStore.generateRequestVerifier( oaData[ 'consumer' ], oaData[ 'request' ] )
+  #TODO: Missing userDN and userGROUp
+  #TODO: This has to be done in the web
+  return oaHelper.generateRequestVerifier( oaData[ 'consumer' ], oaData[ 'request' ] )
 
 @bottle.post( "/oauth/token/access" )
 @bottle.route( "/oauth/token/access" )
 def oauthAccessToken():
   oaRequest = getOARequest()
 
-  result = checkRequest( oaRequest, checkRequestToken = True, checkVerifier = True )
+  result = oaHelper.checkRequest( oaRequest, checkRequest = True, checkVerifier = True )
   if not result[ 'OK' ]:
     gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
     bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
   oaData = result[ 'Value' ]
 
-  tokenPair = gOADataStore.generateTokenPair( oaData[ 'consumer' ], request = False )
-  reqToken = oauth2.Token( tokenPair[0], tokenPair[1] )
+  tokenData = oaHelper.generateToken( oaData[ 'consumer' ], oaData[ 'token' ], oaData[ 'verifier' ] )
+  reqToken = oauth2.Token( tokenData[ 'token'], tokenData[ 'secret' ] )
   return reqToken.to_string()
 
 @bottle.post( "/oauth/rawRequest" )
@@ -98,15 +101,11 @@ def oauthAccessToken():
 def oauthRawRequest():
   oaRequest = getOARequest()
 
-  result = checkRequest( oaRequest, checkAccessToken = True )
+  result = oaHelper.checkRequest( oaRequest, checkToken = True )
   if not result[ 'OK' ]:
     gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
     bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
   oaData = result[ 'Value' ]
-
-  if not gOADataStore.checkAccessToken( oaData[ 'consumer' ], oaData[ 'access' ] ):
-    gLogger.info( "Not authorized access token" )
-    bottle.abort( 401, "Invalid token" )
 
   #TODO: DO STUFF
   return "STUFF"

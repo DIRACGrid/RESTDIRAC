@@ -76,6 +76,11 @@ class CredentialsHandler( RequestHandler ):
   def export_expireVerifier( self, consumerKey, request, verifier ):
     return self.__credDB.expireVerifier( consumerKey, request, verifier )
 
+  auth_getVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getVerifier = ( types.StringType, types.StringType )
+  def export_getVerifier( self, consumerKey, request ):
+    return self.__credDB.getVerifier( consumerKey, request )
+
 
   ##
   # Token management

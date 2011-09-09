@@ -21,11 +21,20 @@ class OAuthHelper():
   def getConsumerSecret( self, consumerKey ):
     return self.__cred.getConsumerSecret( consumerKey )
 
-  def getTokenSecret( self, consumerKey, tokenString ):
-    pass
+  def generateRequest( self, consumerKey ):
+    return self.__cred.generateRequesT( consumerKey )
+
+  def generateVerifier( self, consumerKey, request ):
+    return self.__cred.generateVerifier( consumerKey, request )
+
+  def generateToken( self, consumerKey, request, verifier, lifeTime = 86400 ):
+    return self.__cred.generateToken( consumerKey, request, verifier, lifeTim )
+
+  def getTokenSecret( self, consumerKey, request ):
+    return self.__cred.getRequestSecret( consumerKey, request )
 
 
-  def checkRequest( self, oaRequest, checkRequestToken = False, checkAccessToken = False, checkVerifier = False ):
+  def checkRequest( self, oaRequest, checkRequest = False, checkToken = False, checkVerifier = False ):
     consumerKey = oaRequest[ 'oauth_consumer_key' ]
     expectedSecret = self.getConsumerSecret( consumerKey )
     if not expectedSecret:
@@ -37,22 +46,24 @@ class OAuthHelper():
 
     oaToken = False
 
-    if checkRequestToken or checkAccessToken:
+    if checkRequest or checkToken:
       if 'oauth_token' not in oaRequest:
         return S_ERROR( "No token in request " )
       tokenString = oaRequest[ 'oauth_token' ]
-      if checkRequestToken:
-        result = self.getRequestSecret( consumerKey, tokenString )
-        checkRequest = True
-        tokenType = "request"
+      if checkRequest:
+        type = 'request'
+        result = self.__cred.getRequestSecret( consumerKey, tokenString )
+        if not result[ 'OK' ]:
+          return result
+        expectedSecret = result[ 'Value' ]
       else:
-        checkRequest = False
-        tokenType = "access"
-      expectedSecret = self.getTokenSecret( consumerToken, tokenString, checkRequest )
-      if not expectedSecret:
-        return S_ERROR( "Unknown %s token" % tokenType )
+        type = 'token'
+        result = self.__cred.getTokenData( consumerKey, tokenString )
+        if not result[ 'OK' ]:
+          return result
+        expectedSecret = result[ 'Value' ][ 'secret' ]
       oaToken = oauth2.Token( tokenString, expectedSecret )
-      oaData[ tokenType ] = tokenString
+      oaData[ type ] = tokenString
 
     try:
       self.__oaServer.verify_request( oaRequest, oaConsumer, oaToken )
@@ -60,7 +71,7 @@ class OAuthHelper():
       return S_ERROR( "Invalid request: %s" % e )
 
     if checkVerifier:
-      if oaRequest['oauth_verifier'] != gOADataStore.getRequestVerifier( consumerToken, reqToken ):
+      if oaRequest['oauth_verifier'] != self.__cred.getVerifier( consumerToken, reqToken ):
         return S_ERROR( "Invalid verifier" )
       oaData[ 'verify' ] = oaRequest['oauth_verifier']
 

@@ -296,7 +296,7 @@ class CredentialsDB( DB ):
       return result
     return S_OK( verifier )
 
-  def __verifierCondition( self, consumerKey, request, verifier ):
+  def __verifierCondition( self, consumerKey, request, verifier = "" ):
     sqlCond = [ "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" ]
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
       return S_ERROR( "Consumer key doesn't have a correct size" )
@@ -305,16 +305,20 @@ class CredentialsDB( DB ):
       return result
     sqlConsumerKey = result[ 'Value' ]
     sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
-    result = self._escapeString( verifier )
-    if not result[ 'OK' ]:
-      return result
-    sqlVerifier = result[ 'Value' ]
-    sqlCond.append( "Verifier=%s" % sqlVerifier )
+
     result = self._escapeString( request )
     if not result[ 'OK' ]:
       return result
     sqlRequest = result[ 'Value' ]
     sqlCond.append( "Request=%s" % sqlRequest )
+
+    if verifier:
+      result = self._escapeString( verifier )
+      if not result[ 'OK' ]:
+        return result
+      sqlVerifier = result[ 'Value' ]
+      sqlCond.append( "Verifier=%s" % sqlVerifier )
+
     return S_OK( sqlCond )
 
   def __getVerifierUserID( self, consumerKey, request, verifier ):
@@ -354,6 +358,19 @@ class CredentialsDB( DB ):
       return result
     return S_OK()
 
+  def getVerifier( self, consumerKey, request ):
+    result = self.__verifierCondition( consumerKey, request )
+    if not result[ 'OK' ]:
+      return result
+    sqlCond = result[ 'Value' ]
+    sqlCmd = "SELECT Verifier FROM `CredDB_OAVerifier` WHERE %s" % " AND ".join( sqlCond )
+    result = self._query( sqlCmd )
+    if not result[ 'OK' ]:
+      return result
+    data = result[ 'Value' ]
+    if len( data ) < 1 or len( data[0] ) < 1:
+      return S_ERROR( "Unknown verifier" )
+    return S_OK( data[0][0] )
 
   #############################
   #

@@ -40,6 +40,9 @@ def testCredObj( credClient ):
   print "Checking user"
   if ( userDN, userGroup ) != checkRes( credClient.getVerifierUserAndGroup( consumerKey, request, verifier ) ):
     raise RuntimeError( "Users are different for verifier" )
+  print "Checking verifier"
+  if verifier != checkRes( credClient.getVerifier( consumerKey, request ) ):
+    raise RuntimeError( "Different verifier returned" )
   print "Trying to expire with different consumer"
   result = credClient.expireVerifier( "ASD%s" % consumerKey, request, verifier )
   if result[ 'OK' ]:

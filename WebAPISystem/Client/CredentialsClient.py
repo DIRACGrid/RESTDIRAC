@@ -114,8 +114,12 @@ class CredentialsClient:
     result = self.__getRPC().getVerifierUserAndGroup( consumerKey, request, verifier )
     return self.__cleanReturn( result )
 
-  def expireVerifier( self, consumerKey, request, verifie ):
-    result = self.__getRPC().expireVerifier( consumerKey, request, verifie )
+  def expireVerifier( self, consumerKey, request, verifier ):
+    result = self.__getRPC().expireVerifier( consumerKey, request, verifier )
+    return self.__cleanReturn( result )
+
+  def getVerifier( self, consumerKey, request ):
+    result = self.__getRPC().getVerifier( consumerKey, request )
     return self.__cleanReturn( result )
 
   ##
