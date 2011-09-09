@@ -162,13 +162,15 @@ class CredentialsDB( DB ):
     sqlCond.append( "Type=%s" % sqlType )
     sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
     sqlCond.append( "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" )
-    sqlSel = "SELECT Secret FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
+    sqlSel = "SELECT Secret, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
     result = self._query( sqlSel )
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
     if len( data ) and len( data[0] ):
-      return S_OK( data[0][0] )
+      result = S_OK( data[0][0] )
+      result[ 'lifeTime' ] = data[0][1]
+      return result
     return S_ERROR( "Token is either unknown or invalid" )
 
   def getTokens( self, condDict = {} ):
@@ -192,6 +194,8 @@ class CredentialsDB( DB ):
         else:
           sqlCond.append( "%s in ( %s )" % ( sqlField, ",".join( sqlValues[0] ) ) )
 
+    sqlFields.append( "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime )" )
+    fields.append( "LifeTime" )
     sqlCmd = "SELECT %s FROM %s WHERE %s" % ( ", ". join( sqlFields ), ", ".join( sqlTables ), " AND ".join( sqlCond ) )
     result = self._query( sqlCmd )
     if not result[ 'OK' ]:
