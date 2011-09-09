@@ -68,6 +68,13 @@ class CredentialsDB( DB ):
                                       'PrimaryKey' : 'Verifier',
                                      }
 
+    if 'CredDB_OAConsumers' not in tablesInDB:
+      tablesD[ 'CredDB_OAConsumers' ] = { 'Fields' : { 'ConsumerKey' : 'VARCHAR(64) NOT NULL UNIQUE',
+                                                       'Secret' : 'CHAR(32) NOT NULL',
+                                                  },
+                                      'PrimaryKey' : 'ConsumerKey',
+                                     }
+
     return self._createTables( tablesD )
 
 
@@ -94,6 +101,9 @@ class CredentialsDB( DB ):
     return self.__getIdentityId( userDN, userGroup, autoInsert = False )
 
   def generateToken( self, userDN, userGroup, consumerKey, tokenType = "request", lifeTime = 86400 ):
+    result = self.getConsumerSecret( consumerKey )
+    if not result[ 'OK' ]:
+      return result
     result = self.getIdentityId( userDN, userGroup )
     if not result[ 'OK' ]:
       self.logger.error( result[ 'Value' ] )
@@ -241,6 +251,9 @@ class CredentialsDB( DB ):
     return S_OK( totalCleaned )
 
   def generateVerifier( self, userDN, userGroup, consumerKey, lifeTime = 3600, retries = 5 ):
+    result = self.getConsumerSecret( consumerKey )
+    if not result[ 'OK' ]:
+      return result
     result = self.getIdentityId( userDN, userGroup )
     if not result[ 'OK' ]:
       self.logger.error( result[ 'Value' ] )
@@ -292,3 +305,63 @@ class CredentialsDB( DB ):
     if result[ 'Value' ] < 1:
       return S_ERROR( "Verifier is unknown" )
     return S_OK()
+
+  def generateConsumerPair( self, consumerKey = "" ):
+    if not consumerKey:
+      consumerKey = '"%s"' % md5.md5( "%s|%s|%s" % ( str( self ), time.time(), random.random() ) ).hexdigest()
+      sqlConsumerKey = '"%s"' % consumerKey
+    else:
+      if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+        return S_ERROR( "Consumer key doesn't have a correct size" )
+      result = self._escapeString( consumerKey )
+      if not result[ 'OK' ]:
+        return result
+      sqlConsumerKey = result[ 'Value' ]
+    secret = md5.md5( "%s|%s|%s" % ( consumerKey, time.time(), random.random() ) ).hexdigest()
+    sqlSecret = '"%s"' % secret
+
+    sqlFields = "( ConsumerKey, Secret )"
+    sqlValues = ( sqlConsumerKey, sqlSecret )
+    sqlIn = "INSERT INTO `CredDB_OAConsumers` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
+    result = self._update( sqlIn )
+    if not result[ 'OK' ]:
+      return result
+    return S_OK( ( consumerKey, secret ) )
+
+  def getConsumerSecret( self, consumerKey ):
+    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+      return S_ERROR( "Consumer key doesn't have a correct size" )
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+    sqlCmd = "SELECT Secret FROM `CredDB_OAConsumers` WHERE ConsumerKey = %s" % sqlConsumerKey
+    result = self._query( sqlCmd )
+    if not result[ 'OK' ]:
+      return result
+    data = result[ 'Value' ]
+    if len( data ) < 1 or len( data[0] ) < 1:
+      return S_ERROR( "Unknown consumer" )
+    return S_OK( data[0][0] )
+
+  def deleteConsumer( self, consumerKey ):
+    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+      return S_ERROR( "Consumer key doesn't have a correct size" )
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+    totalDeleted = 0
+    for table in ( "OAConsumers", "OAVerifier", "OATokens" ):
+      sqlCmd = "DELETE FROM `CredDB_%s` WHERE ConsumerKey = %s" % ( table, sqlConsumerKey )
+      result = self._update( sqlCmd )
+      if not result[ 'OK' ]:
+        return result
+      totalDeleted += result[ 'Value' ]
+    return S_OK( totalDeleted )
+
+  def getAllConsumers( self ):
+    sqlCmd = "SELECT ConsumerToken, Secret FROM `CredDB_OAConsumers`"
+    return self._query( sqlCmd )
+
+

@@ -62,6 +62,23 @@ class CredentialsHandler( RequestHandler ):
   def export_validateVerifier( self, userDN, userGroup, consumerKey, verifier ):
     return self.__credDB.validateVerifier( userDN, userGroup, consumerKey, verifier )
 
+  auth_generateConsumerPair = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_generateConsumerPair = []
+  def export_generateConsumerPair( self, consumerKey = "" ):
+    return self.__credDB.generateConsumerPair( consumerKey )
 
+  auth_getConsumerSecret = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getConsumerSecret = [ types.StringType ]
+  def export_getConsumerSecret( self, consumerKey ):
+    return self.__credDB.getConsumerSecret( consumerKey )
 
+  auth_deleteConsumer = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_deleteConsumer = [ types.StringType ]
+  def export_deleteConsumer( self, consumerKey ):
+    return self.__credDB.deleteConsumer( consumerKey )
+
+  auth_getAllConsumers = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getAllConsumers = []
+  def export_getAllConsumers( self ):
+    return self.__credDB.getAllConsumers()
 

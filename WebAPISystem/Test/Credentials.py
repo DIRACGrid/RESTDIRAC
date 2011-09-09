@@ -9,6 +9,18 @@ def testCredObj( credClient ):
   userDN = "/dummyDB"
   userGroup = "dummyGroup"
   consumerKey = "dummyConsumer"
+  consumerSecret = ""
+  print "Checking if the consumer exists"
+  result = credClient.getConsumerSecret( consumerKey )
+  if not result[ 'OK' ]:
+    print "Creating consumer"
+    result = credClient.generateConsumerPair( consumerKey )
+    if not result[ 'OK' ]:
+      print "[ERR] %s" % result[ 'Message' ]
+      return False
+    consumerSecret = result[ 'Value' ]
+  consumerSecret = result[ 'Value' ][1]
+  print " -- Testing tokens"
   for tType in ( "request", "access" ):
     print "Trying token type: %s" % tType
     result = credClient.generateToken( userDN, userGroup, consumerKey, tokenType = tType )
@@ -61,6 +73,7 @@ def testCredObj( credClient ):
     print "[ERR] No tokens were cleaned"
     return False
   print "%s tokens were cleaned" % result[ 'Value' ]
+  print " -- Testing Verifiers"
   print "Requesting verifier"
   result = credClient.generateVerifier( userDN, userGroup, consumerKey )
   if not result[ 'OK' ]:
@@ -79,11 +92,45 @@ def testCredObj( credClient ):
   if not result[ 'OK' ]:
     print "[ERR] %s" % result['Message']
     return False
+  print " -- Testing consumers"
+  print "Getting token"
+  result = credClient.generateToken( userDN, userGroup, consumerKey, tokenType = "request" )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    return False
+  tokenPair = result[ 'Value' ]
+  print "Requesting verifier"
+  result = credClient.generateVerifier( userDN, userGroup, consumerKey )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    return False
+  verifier = result[ 'Value' ]
+  print "Deleting consumer"
+  result = credClient.deleteConsumer( consumerKey )
+  if not result[ 'OK' ]:
+    print "[ERR] %s" % result['Message']
+    return False
+  if result[ 'Value' ] < 3:
+    print "[ERR] Deleted less than three objects: %d" % result['Value']
+    return False
+  print "%d objects were deleted" % result[ 'Value' ]
+  print "Trying to retrieve token"
+  result = credClient.getSecret( userDN, userGroup, consumerKey, tokenPair[0], tokenType = "request" )
+  if result[ 'OK' ]:
+    print "[ERR] Token could be retrieved!", result[ 'Value' ]
+    return False
+  print "Token was deleted :)"
+  print "Trying to retrieve verifier"
+  result = credClient.validateVerifier( userDN, userGroup, consumerKey, verifier )
+  if result[ 'OK' ]:
+    print "[ERR] Verifier could be retrieved!"
+    return False
+  print "Verifier was deleted :)"
   print "ALL OK"
   return True
 
 if __name__ == "__main__":
-  for credObj in ( CredentialsClient(), CredentialsDB() ):
+  for credObj in ( CredentialsDB(), CredentialsClient() ):
     print "====== TESTING %s ======" % credObj
     if not testCredObj( credObj ):
       print "EXITING"
