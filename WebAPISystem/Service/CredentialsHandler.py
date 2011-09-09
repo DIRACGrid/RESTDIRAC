@@ -11,56 +11,6 @@ class CredentialsHandler( RequestHandler ):
     cls.__credDB = CredentialsDB()
     return S_OK()
 
-  ##
-  # Token management
-  ##
-
-
-  auth_generateToken = [ Properties.TRUSTED_HOST ]
-  types_generateToken = ( types.StringType, types.StringType, types.StringType,
-                          types.StringType, ( types.IntType, types.LongType ) )
-  def export_generateToken( self, userDN, userGroup, consumerKey, request, lifeTime ):
-    return self.__credDB.generateToken( userDN, userGroup, consumerKey, request, lifeTime )
-
-  auth_getTokenSecret = [ Properties.TRUSTED_HOST ]
-  types_getTokenSecret = ( types.StringType, types.StringType,
-                      types.StringType, types.StringType )
-  def export_getTokenSecret( self, userDN, userGroup, consumerKey, token ):
-    return self.__credDB.getTokenSecret( userDN, userGroup, consumerKey, token )
-
-  auth_revokeUserToken = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_revokeUserToken = [ types.StringType, types.StringType, types.StringType ]
-  def export_revokeUserToken( self, userDN, userGroup, token ):
-    return self.__credDB.revokeUserToken( userDN, userGroup, token )
-
-  auth_revokeToken = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR, 'all' ]
-  types_revokeToken = [ types.StringType ]
-  def export_revokeToken( self, token ):
-    credDict = self.srv_getRemoteCredentials()
-    for prop in ( Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ):
-      if prop in credDict[ 'properties' ]:
-        return self.__credDB.revokeToken( token )
-    return self.__credDB.revokeToken( credDict[ 'DN' ], credDict[ 'group' ], token )
-
-  auth_getTokens = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_getTokens = [ types.DictType ]
-  def export_getTokens( self, condDict ):
-    return self.__credDB.getTokens( condDict )
-
-  ##
-  # Verifier management
-  ##
-
-  auth_generateVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_generateVerifier = ( types.StringType, types.StringType, types.StringType,
-                             ( types.IntType, types.LongType ) )
-  def export_generateVerifier( self, userDN, userGroup, consumerKey, lifeTime ):
-    return self.__credDB.generateVerifier( userDN, userGroup, consumerKey, lifeTime )
-
-  auth_validateVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_validateVerifier = ( types.StringType, types.StringType, types.StringType, types.StringType )
-  def export_validateVerifier( self, userDN, userGroup, consumerKey, verifier ):
-    return self.__credDB.validateVerifier( userDN, userGroup, consumerKey, verifier )
 
   ##
   # Consumer management
@@ -86,6 +36,7 @@ class CredentialsHandler( RequestHandler ):
   def export_getAllConsumers( self ):
     return self.__credDB.getAllConsumers()
 
+
   ##
   # Request management
   ##
@@ -104,6 +55,63 @@ class CredentialsHandler( RequestHandler ):
   types_deleteRequest = [ types.StringType ]
   def export_deleteRequest( self, request ):
     return self.__credDB.deleteRequest( request )
+
+  ##
+  # Verifier management
+  ##
+
+  auth_generateVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_generateVerifier = ( types.StringType, types.StringType,
+                             types.StringType, types.StringType )
+  def export_generateVerifier( self, userDN, userGroup, consumerKey, request ):
+    return self.__credDB.generateVerifier( userDN, userGroup, consumerKey, request )
+
+  auth_getVerifierUserAndGroup = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getVerifierUserAndGroup = ( types.StringType, types.StringType, types.StringType )
+  def export_getVerifierUserAndGroup( self, consumerKey, request, verifier ):
+    return self.__credDB.getVerifierUserAndGroup( consumerKey, request, verifier )
+
+  auth_expireVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_expireVerifier = ( types.StringType, types.StringType, types.StringType )
+  def export_expireVerifier( self, consumerKey, request, verifier ):
+    return self.__credDB.expireVerifier( consumerKey, request, verifier )
+
+
+  ##
+  # Token management
+  ##
+
+
+  auth_generateToken = [ Properties.TRUSTED_HOST ]
+  types_generateToken = ( types.StringType, types.StringType, types.StringType,
+                          ( types.IntType, types.LongType ) )
+  def export_generateToken( self, consumerKey, request, verifier, lifeTime ):
+    return self.__credDB.generateToken( consumerKey, request, verifier, lifeTime )
+
+  auth_getTokenData = [ Properties.TRUSTED_HOST ]
+  types_getTokenData = ( types.StringType, types.StringType )
+  def export_getTokenData( self, consumerKey, token ):
+    return self.__credDB.getTokenData( consumerKey, token )
+
+  auth_revokeUserToken = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_revokeUserToken = [ types.StringType, types.StringType, types.StringType ]
+  def export_revokeUserToken( self, userDN, userGroup, token ):
+    return self.__credDB.revokeUserToken( userDN, userGroup, token )
+
+  auth_revokeToken = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR, 'all' ]
+  types_revokeToken = [ types.StringType ]
+  def export_revokeToken( self, token ):
+    credDict = self.srv_getRemoteCredentials()
+    for prop in ( Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ):
+      if prop in credDict[ 'properties' ]:
+        return self.__credDB.revokeToken( token )
+    return self.__credDB.revokeToken( credDict[ 'DN' ], credDict[ 'group' ], token )
+
+  auth_getTokens = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getTokens = [ types.DictType ]
+  def export_getTokens( self, condDict ):
+    return self.__credDB.getTokens( condDict )
+
 
   ##
   # Cleaning

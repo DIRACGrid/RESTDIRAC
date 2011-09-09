@@ -72,6 +72,7 @@ class CredentialsDB( DB ):
       tablesD[ 'CredDB_OAVerifier' ] = { 'Fields' : { 'Verifier' : 'CHAR(32) NOT NULL',
                                                       'UserId' : 'INT UNSIGNED NOT NULL',
                                                       'ConsumerKey' : 'VARCHAR(255) NOT NULL',
+                                                      'Request' : 'CHAR(32) NOT NULL',
                                                       'ExpirationTime' : 'DATETIME'
                                                   },
                                       'PrimaryKey' : 'Verifier',
@@ -86,158 +87,75 @@ class CredentialsDB( DB ):
 
     return self._createTables( tablesD )
 
+  #############################
+  #
+  #     Consumers
+  #
+  #############################
 
-  def getIdentityId( self, userDN, userGroup, autoInsert = True ):
-    sqlDN = self._escapeString( userDN )[ 'Value' ]
-    sqlGroup = self._escapeString( userGroup )[ 'Value' ]
-    sqlQuery = "SELECT Id FROM `CredDB_Identities` WHERE UserDN=%s AND UserGroup=%s" % ( sqlDN, sqlGroup )
-    result = self._query( sqlQuery )
-    if not result[ 'OK' ]:
-      return result
-    data = result[ 'Value' ]
-    if len( data ) > 0 and len( data[0] ) > 0:
-      return S_OK( data[0][0] )
-    if not autoInsert:
-      return S_ERROR( "Could not retrieve identity %s@%s" % ( userDN, userGroup ) )
-    sqlIn = "INSERT INTO `CredDB_Identities` ( Id, UserDN, UserGroup ) VALUES (0, %s, %s)" % ( sqlDN, sqlGroup )
+  def generateConsumerPair( self, consumerKey = "" ):
+    if not consumerKey:
+      consumerKey = '"%s"' % md5.md5( "%s|%s|%s" % ( str( self ), time.time(), random.random() ) ).hexdigest()
+      sqlConsumerKey = '"%s"' % consumerKey
+    else:
+      if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+        return S_ERROR( "Consumer key doesn't have a correct size" )
+      result = self._escapeString( consumerKey )
+      if not result[ 'OK' ]:
+        return result
+      sqlConsumerKey = result[ 'Value' ]
+    secret = md5.md5( "%s|%s|%s" % ( consumerKey, time.time(), random.random() ) ).hexdigest()
+    sqlSecret = '"%s"' % secret
+
+    sqlFields = "( ConsumerKey, Secret )"
+    sqlValues = ( sqlConsumerKey, sqlSecret )
+    sqlIn = "INSERT INTO `CredDB_OAConsumers` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
     result = self._update( sqlIn )
     if not result[ 'OK' ]:
-      if result[ 'Message' ].find( "Duplicate key" ) > -1:
-        return self.__getIdentityId( userDN, userGroup, autoInsert = False )
       return result
-    if 'lastRowId' in result:
-      return S_OK( result['lastRowId'] )
-    return self.__getIdentityId( userDN, userGroup, autoInsert = False )
+    return S_OK( ( consumerKey, secret ) )
 
-  def generateToken( self, userDN, userGroup, consumerKey, request, lifeTime = 86400 ):
-    result = self.getRequestSecret( consumerKey, request )
-    if not result[ 'OK' ]:
-      return result
-    result = self.getIdentityId( userDN, userGroup )
-    if not result[ 'OK' ]:
-      self.logger.error( result[ 'Value' ] )
-      return result
-    userId = result[ 'Value' ]
-    try:
-      lifeTime = int( lifeTime )
-    except ValueError:
-      return S_ERROR( "Life time has to be a positive integer" )
-    if lifeTime < 0:
-      return S_ERROR( "Life time has to be a positive integer" )
-    result = self.__generateToken( userId, consumerKey, lifeTime )
-    if not result[ 'OK' ]:
-      return result
-    self.deleteRequest( request )
-    return result
-
-
-  def __generateToken( self, userId, consumerKey, lifeTime, retries = 5 ):
-    token = md5.md5( "%s|%s|%s|%s|%s" % ( userId, type, consumerKey, time.time(), random.random() ) ).hexdigest()
-    secret = md5.md5( "%s|%s|%s\%s" % ( userId, consumerKey, time.time(), random.random() ) ).hexdigest()
+  def getConsumerSecret( self, consumerKey ):
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
       return S_ERROR( "Consumer key doesn't have a correct size" )
     result = self._escapeString( consumerKey )
     if not result[ 'OK' ]:
       return result
     sqlConsumerKey = result[ 'Value' ]
-
-    sqlFields = "( Token, Secret, ConsumerKey, UserId, ExpirationTime )"
-    sqlValues = [ "'%s'" % token, "'%s'" % secret, sqlConsumerKey, "%d" % userId,
-                 "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime ]
-    sqlIn = "INSERT INTO `CredDB_OATokens` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
-    result = self._update( sqlIn )
-    if not result[ 'OK' ]:
-      if result[ 'Message' ].find( "Duplicate key" ) > -1 and retries > 0 :
-        return self.__generateToken( userId, consumerKey, lifeTime, retries - 1 )
-      return result
-    return S_OK( ( token, secret ) )
-
-  def getTokenSecret( self, userDN, userGroup, consumerKey, token ):
-    result = self.getIdentityId( userDN, userGroup )
-    if not result[ 'OK' ]:
-      self.logger.error( result[ 'Value' ] )
-      return result
-    userId = result[ 'Value' ]
-
-    result = self._escapeString( token )
-    if not result[ 'OK' ]:
-      self.logger.error( result[ 'Value' ] )
-      return result
-    sqlToken = result[ 'Value' ]
-
-    result = self._escapeString( consumerKey )
-    if not result[ 'OK' ]:
-      self.logger.error( result[ 'Value' ] )
-      return result
-    sqlConsumerKey = result[ 'Value' ]
-
-    sqlCond = [ "UserId = %d" % userId ]
-    sqlCond.append( "Token=%s" % sqlToken )
-    sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
-    sqlCond.append( "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" )
-    sqlSel = "SELECT Secret, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
-    result = self._query( sqlSel )
-    if not result[ 'OK' ]:
-      return result
-    data = result[ 'Value' ]
-    if len( data ) and len( data[0] ):
-      result = S_OK( data[0][0] )
-      result[ 'lifeTime' ] = data[0][1]
-      return result
-    return S_ERROR( "Token is either unknown or invalid" )
-
-  def getTokens( self, condDict = {} ):
-    sqlTables = [ '`CredDB_OATokens` t', '`CredDB_Identities` i' ]
-    sqlCond = [ "t.UserId = i.Id"]
-
-    fields = [ 'Token', 'Secret', 'ConsumerKey', 'UserDN', 'UserGroup' ]
-    sqlFields = []
-    for field in fields:
-      if field in ( 'UserDN', 'UserGroup' ):
-        sqlField = "i.%s" % field
-      else:
-        sqlField = "t.%s" % field
-      sqlFields.append( sqlField )
-      if field in condDict:
-        if type( condDict[ field ] ) not in ( types.ListType, types.TupleType ):
-          condDict[ field ] = [ str( condDict[ field ] ) ]
-        sqlValues = [ self._escapeString( val )[ 'Value' ] for val in condDict[ field ] ]
-        if len( sqlValues ) == 1:
-          sqlCond.append( "%s = %s" % ( sqlField, sqlValues[0] ) )
-        else:
-          sqlCond.append( "%s in ( %s )" % ( sqlField, ",".join( sqlValues[0] ) ) )
-
-    sqlFields.append( "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime )" )
-    fields.append( "LifeTime" )
-    sqlCmd = "SELECT %s FROM %s WHERE %s" % ( ", ". join( sqlFields ), ", ".join( sqlTables ), " AND ".join( sqlCond ) )
+    sqlCmd = "SELECT Secret FROM `CredDB_OAConsumers` WHERE ConsumerKey = %s" % sqlConsumerKey
     result = self._query( sqlCmd )
     if not result[ 'OK' ]:
       return result
-    return S_OK( { 'Parameters' : fields, 'Records' : result[ 'Value' ] } )
+    data = result[ 'Value' ]
+    if len( data ) < 1 or len( data[0] ) < 1:
+      return S_ERROR( "Unknown consumer" )
+    return S_OK( data[0][0] )
 
-  def revokeUserToken( self, userDN, userGroup, token ):
-    result = self.getIdentityId( userDN, userGroup )
+  def deleteConsumer( self, consumerKey ):
+    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+      return S_ERROR( "Consumer key doesn't have a correct size" )
+    result = self._escapeString( consumerKey )
     if not result[ 'OK' ]:
-      self.logger.error( result[ 'Value' ] )
       return result
-    userId = result[ 'Value' ]
-    return self.revokeToken( token, userId )
+    sqlConsumerKey = result[ 'Value' ]
+    totalDeleted = 0
+    for table in ( "OAConsumers", "OAVerifier", "OATokens" ):
+      sqlCmd = "DELETE FROM `CredDB_%s` WHERE ConsumerKey = %s" % ( table, sqlConsumerKey )
+      result = self._update( sqlCmd )
+      if not result[ 'OK' ]:
+        return result
+      totalDeleted += result[ 'Value' ]
+    return S_OK( totalDeleted )
 
-  def revokeToken( self, token, userId = -1 ):
-    result = self._escapeString( token )
-    if not result[ 'OK' ]:
-      self.logger.error( result[ 'Value' ] )
-      return result
-    sqlToken = result[ 'Value' ]
-    sqlCond = [ "Token=%s" % sqlToken ]
-    try:
-      userId = int( userId )
-    except ValueError:
-      return S_ERROR( "userId has to be an integer" )
-    if userId > -1:
-      sqlCond.append( "userId = %d" % userId )
-    sqlDel = "DELETE FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
-    return self._update( sqlDel )
+  def getAllConsumers( self ):
+    sqlCmd = "SELECT ConsumerToken, Secret FROM `CredDB_OAConsumers`"
+    return self._query( sqlCmd )
+
+  #############################
+  #
+  #     Requests
+  #
+  #############################
 
   def generateRequest( self, consumerKey, lifeTime = 900 ):
     result = self.getConsumerSecret( consumerKey )
@@ -301,21 +219,52 @@ class CredentialsDB( DB ):
     sqlCmd = "DELETE FROM `CredDB_OARequests` WHERE Request=%s" % result[ 'Value' ]
     return self._update( sqlCmd )
 
-  def cleanExpired( self, minLifeTime = 0 ):
-    try:
-      minLifeTime = int( minLifeTime )
-    except ValueError:
-      return S_ERROR( "minLifeTime has to be an integer" )
-    totalCleaned = 0
-    for table in ( "CredDB_OATokens", "CredDB_OAVerifier" ):
-      sqlDel = "DELETE FROM `CredDB_OATokens` WHERE TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) < %d" % minLifeTime
-      result = self._update( sqlDel )
-      if not result[ 'OK' ]:
-        return result
-      totalCleaned += result[ 'Value' ]
-    return S_OK( totalCleaned )
+  #############################
+  #
+  #     User ID
+  #
+  #############################
 
-  def generateVerifier( self, userDN, userGroup, consumerKey, lifeTime = 3600, retries = 5 ):
+  def getIdentityId( self, userDN, userGroup, autoInsert = True ):
+    sqlDN = self._escapeString( userDN )[ 'Value' ]
+    sqlGroup = self._escapeString( userGroup )[ 'Value' ]
+    sqlQuery = "SELECT Id FROM `CredDB_Identities` WHERE UserDN=%s AND UserGroup=%s" % ( sqlDN, sqlGroup )
+    result = self._query( sqlQuery )
+    if not result[ 'OK' ]:
+      return result
+    data = result[ 'Value' ]
+    if len( data ) > 0 and len( data[0] ) > 0:
+      return S_OK( data[0][0] )
+    if not autoInsert:
+      return S_ERROR( "Could not retrieve identity %s@%s" % ( userDN, userGroup ) )
+    sqlIn = "INSERT INTO `CredDB_Identities` ( Id, UserDN, UserGroup ) VALUES (0, %s, %s)" % ( sqlDN, sqlGroup )
+    result = self._update( sqlIn )
+    if not result[ 'OK' ]:
+      if result[ 'Message' ].find( "Duplicate key" ) > -1:
+        return self.__getIdentityId( userDN, userGroup, autoInsert = False )
+      return result
+    if 'lastRowId' in result:
+      return S_OK( result['lastRowId'] )
+    return self.__getIdentityId( userDN, userGroup, autoInsert = False )
+
+  def __getUserAndGroup( self, userId ):
+    sqlCmd = "SELECT UserDN, UserGroup FROM `CredDB_Identities` WHERE Id = %d" % userId
+    result = self._query( sqlCmd )
+    if not result[ 'OK' ]:
+      return result
+    data = result[ 'Value' ]
+    if len( data ) < 1 or len( data[0] ) < 1:
+      self.logger.error( "This is incoherent!!! UserId = %d has no identity" % userId )
+      return S_ERROR( "Unknown user!" )
+    return S_OK( data[0] )
+
+  #############################
+  #
+  #     Verifier
+  #
+  #############################
+
+  def generateVerifier( self, userDN, userGroup, consumerKey, request, lifeTime = 3600, retries = 5 ):
     result = self.getConsumerSecret( consumerKey )
     if not result[ 'OK' ]:
       return result
@@ -331,9 +280,13 @@ class CredentialsDB( DB ):
     if not result[ 'OK' ]:
       return result
     sqlConsumerKey = result[ 'Value' ]
+    result = self._escapeString( request )
+    if not result[ 'OK' ]:
+      return result
+    sqlRequest = result[ 'Value' ]
 
-    sqlFields = "( Verifier, UserId, ConsumerKey, ExpirationTime )"
-    sqlValues = [ "'%s'" % verifier, "%d" % userId, sqlConsumerKey,
+    sqlFields = "( Verifier, UserId, ConsumerKey, Request, ExpirationTime )"
+    sqlValues = [ "'%s'" % verifier, "%d" % userId, sqlConsumerKey, sqlRequest,
                  "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime ]
     sqlIn = "INSERT INTO `CredDB_OAVerifier` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
     result = self._update( sqlIn )
@@ -343,14 +296,8 @@ class CredentialsDB( DB ):
       return result
     return S_OK( verifier )
 
-  def validateVerifier( self, userDN, userGroup, consumerKey, verifier ):
-    result = self.getIdentityId( userDN, userGroup )
-    if not result[ 'OK' ]:
-      self.logger.error( result[ 'Value' ] )
-      return result
-    userId = result[ 'Value' ]
+  def __verifierCondition( self, consumerKey, request, verifier ):
     sqlCond = [ "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" ]
-    sqlCond.append( "UserId=%d" % userId )
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
       return S_ERROR( "Consumer key doesn't have a correct size" )
     result = self._escapeString( consumerKey )
@@ -363,70 +310,207 @@ class CredentialsDB( DB ):
       return result
     sqlVerifier = result[ 'Value' ]
     sqlCond.append( "Verifier=%s" % sqlVerifier )
+    result = self._escapeString( request )
+    if not result[ 'OK' ]:
+      return result
+    sqlRequest = result[ 'Value' ]
+    sqlCond.append( "Request=%s" % sqlRequest )
+    return S_OK( sqlCond )
+
+  def __getVerifierUserID( self, consumerKey, request, verifier ):
+    result = self.__verifierCondition( consumerKey, request, verifier )
+    if not result[ 'OK' ]:
+      return result
+    sqlCond = result[ 'Value' ]
+    sqlCmd = "SELECT UserId FROM `CredDB_OAVerifier` WHERE %s" % " AND ".join( sqlCond )
+    result = self._query( sqlCmd )
+    if not result[ 'OK' ]:
+      return result
+    data = result[ 'Value' ]
+    if len( data ) < 1 or len( data[0] ) < 1:
+      return S_ERROR( "Unknown verifier" )
+    return S_OK( data[0] )
+
+  def getVerifierUserAndGroup( self, consumerKey, request, verifier ):
+    result = self.__getVerifierUserID( consumerKey, request, verifier )
+    if not result[ 'OK' ]:
+      return result
+    userId = result[ 'Value' ]
+    return self.__getUserAndGroup( userId )
+
+  def expireVerifier( self, consumerKey, request, verifier ):
+    result = self.__verifierCondition( consumerKey, request, verifier )
+    if not result[ 'OK' ]:
+      return result
+    sqlCond = result[ 'Value' ]
     sqlDel = "DELETE FROM `CredDB_OAVerifier` WHERE %s" % " AND ".join( sqlCond )
     result = self._update( sqlDel )
     if not result[ 'OK' ]:
       return result
     if result[ 'Value' ] < 1:
       return S_ERROR( "Verifier is unknown" )
-    return S_OK()
-
-  def generateConsumerPair( self, consumerKey = "" ):
-    if not consumerKey:
-      consumerKey = '"%s"' % md5.md5( "%s|%s|%s" % ( str( self ), time.time(), random.random() ) ).hexdigest()
-      sqlConsumerKey = '"%s"' % consumerKey
-    else:
-      if len( consumerKey ) > 64 or len( consumerKey ) < 5:
-        return S_ERROR( "Consumer key doesn't have a correct size" )
-      result = self._escapeString( consumerKey )
-      if not result[ 'OK' ]:
-        return result
-      sqlConsumerKey = result[ 'Value' ]
-    secret = md5.md5( "%s|%s|%s" % ( consumerKey, time.time(), random.random() ) ).hexdigest()
-    sqlSecret = '"%s"' % secret
-
-    sqlFields = "( ConsumerKey, Secret )"
-    sqlValues = ( sqlConsumerKey, sqlSecret )
-    sqlIn = "INSERT INTO `CredDB_OAConsumers` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
-    result = self._update( sqlIn )
+    result = self.deleteRequest( request )
     if not result[ 'OK' ]:
       return result
-    return S_OK( ( consumerKey, secret ) )
+    return S_OK()
 
-  def getConsumerSecret( self, consumerKey ):
+
+  #############################
+  #
+  #     Token
+  #
+  #############################
+
+  def generateToken( self, consumerKey, request, verifier, lifeTime = 86400 ):
+    result = self.__getVerifierUserID( consumerKey, request, verifier )
+    if not result[ 'OK' ]:
+      return result
+    userId = result[ 'Value' ]
+    try:
+      lifeTime = int( lifeTime )
+    except ValueError:
+      return S_ERROR( "Life time has to be a positive integer" )
+    if lifeTime < 0:
+      return S_ERROR( "Life time has to be a positive integer" )
+    result = self.__generateToken( userId, consumerKey, lifeTime )
+    if not result[ 'OK' ]:
+      return result
+    tokenData = { 'token' : result[ 'Value' ][0],
+                  'secret' : result[ 'Value'][1]
+                }
+    result = self.__getUserAndGroup( userId )
+    if not result[ 'OK' ]:
+      gLogger.fatal( "UserId %s has no identity" % userId )
+      return S_ERROR( "User is not known" )
+    tokenData[ 'userDN'] = result['Value' ][0]
+    tokenData[ 'userGroup'] = result['Value' ][1]
+
+    self.expireVerifier( consumerKey, verifier, request )
+
+    return S_OK( tokenData )
+
+
+  def __generateToken( self, userId, consumerKey, lifeTime, retries = 5 ):
+    token = md5.md5( "%s|%s|%s|%s|%s" % ( userId, type, consumerKey, time.time(), random.random() ) ).hexdigest()
+    secret = md5.md5( "%s|%s|%s|%s" % ( userId, consumerKey, time.time(), random.random() ) ).hexdigest()
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
       return S_ERROR( "Consumer key doesn't have a correct size" )
     result = self._escapeString( consumerKey )
     if not result[ 'OK' ]:
       return result
     sqlConsumerKey = result[ 'Value' ]
-    sqlCmd = "SELECT Secret FROM `CredDB_OAConsumers` WHERE ConsumerKey = %s" % sqlConsumerKey
-    result = self._query( sqlCmd )
+
+    sqlFields = "( Token, Secret, ConsumerKey, UserId, ExpirationTime )"
+    sqlValues = [ "'%s'" % token, "'%s'" % secret, sqlConsumerKey, "%d" % userId,
+                 "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime ]
+    sqlIn = "INSERT INTO `CredDB_OATokens` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
+    result = self._update( sqlIn )
+    if not result[ 'OK' ]:
+      if result[ 'Message' ].find( "Duplicate key" ) > -1 and retries > 0 :
+        return self.__generateToken( userId, consumerKey, lifeTime, retries - 1 )
+      return result
+    return S_OK( ( token, secret ) )
+
+  def getTokenData( self, consumerKey, token ):
+    result = self._escapeString( token )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    sqlToken = result[ 'Value' ]
+
+    result = self._escapeString( consumerKey )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    sqlConsumerKey = result[ 'Value' ]
+
+    sqlCond = [ "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" ]
+    sqlCond.append( "Token=%s" % sqlToken )
+    sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
+    sqlSel = "SELECT Secret, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ), UserId FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
+    result = self._query( sqlSel )
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
     if len( data ) < 1 or len( data[0] ) < 1:
-      return S_ERROR( "Unknown consumer" )
-    return S_OK( data[0][0] )
-
-  def deleteConsumer( self, consumerKey ):
-    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
-      return S_ERROR( "Consumer key doesn't have a correct size" )
-    result = self._escapeString( consumerKey )
+      return S_ERROR( "Unknown token" )
+    tokenData = { 'secret' : data[0][0],
+                  'lifeTime' : data[0][1] }
+    result = self.__getUserAndGroup( data[0][2] )
     if not result[ 'OK' ]:
       return result
-    sqlConsumerKey = result[ 'Value' ]
-    totalDeleted = 0
-    for table in ( "OAConsumers", "OAVerifier", "OATokens" ):
-      sqlCmd = "DELETE FROM `CredDB_%s` WHERE ConsumerKey = %s" % ( table, sqlConsumerKey )
-      result = self._update( sqlCmd )
+    tokenData[ 'userDN'] = result['Value' ][0]
+    tokenData[ 'userGroup'] = result['Value' ][1]
+    return S_OK( tokenData )
+
+  def getTokens( self, condDict = {} ):
+    sqlTables = [ '`CredDB_OATokens` t', '`CredDB_Identities` i' ]
+    sqlCond = [ "t.UserId = i.Id"]
+
+    fields = [ 'Token', 'Secret', 'ConsumerKey', 'UserDN', 'UserGroup' ]
+    sqlFields = []
+    for field in fields:
+      if field in ( 'UserDN', 'UserGroup' ):
+        sqlField = "i.%s" % field
+      else:
+        sqlField = "t.%s" % field
+      sqlFields.append( sqlField )
+      if field in condDict:
+        if type( condDict[ field ] ) not in ( types.ListType, types.TupleType ):
+          condDict[ field ] = [ str( condDict[ field ] ) ]
+        sqlValues = [ self._escapeString( val )[ 'Value' ] for val in condDict[ field ] ]
+        if len( sqlValues ) == 1:
+          sqlCond.append( "%s = %s" % ( sqlField, sqlValues[0] ) )
+        else:
+          sqlCond.append( "%s in ( %s )" % ( sqlField, ",".join( sqlValues[0] ) ) )
+
+    sqlFields.append( "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime )" )
+    fields.append( "LifeTime" )
+    sqlCmd = "SELECT %s FROM %s WHERE %s" % ( ", ". join( sqlFields ), ", ".join( sqlTables ), " AND ".join( sqlCond ) )
+    result = self._query( sqlCmd )
+    if not result[ 'OK' ]:
+      return result
+    return S_OK( { 'Parameters' : fields, 'Records' : result[ 'Value' ] } )
+
+  def revokeUserToken( self, userDN, userGroup, token ):
+    result = self.getIdentityId( userDN, userGroup )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    userId = result[ 'Value' ]
+    return self.revokeToken( token, userId )
+
+  def revokeToken( self, token, userId = -1 ):
+    result = self._escapeString( token )
+    if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
+      return result
+    sqlToken = result[ 'Value' ]
+    sqlCond = [ "Token=%s" % sqlToken ]
+    try:
+      userId = int( userId )
+    except ValueError:
+      return S_ERROR( "userId has to be an integer" )
+    if userId > -1:
+      sqlCond.append( "userId = %d" % userId )
+    sqlDel = "DELETE FROM `CredDB_OATokens` WHERE %s" % " AND ".join( sqlCond )
+    return self._update( sqlDel )
+
+
+
+  def cleanExpired( self, minLifeTime = 0 ):
+    try:
+      minLifeTime = int( minLifeTime )
+    except ValueError:
+      return S_ERROR( "minLifeTime has to be an integer" )
+    totalCleaned = 0
+    for table in ( "CredDB_OATokens", "CredDB_OAVerifier" ):
+      sqlDel = "DELETE FROM `CredDB_OATokens` WHERE TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) < %d" % minLifeTime
+      result = self._update( sqlDel )
       if not result[ 'OK' ]:
         return result
-      totalDeleted += result[ 'Value' ]
-    return S_OK( totalDeleted )
+      totalCleaned += result[ 'Value' ]
+    return S_OK( totalCleaned )
 
-  def getAllConsumers( self ):
-    sqlCmd = "SELECT ConsumerToken, Secret FROM `CredDB_OAConsumers`"
-    return self._query( sqlCmd )
 
 

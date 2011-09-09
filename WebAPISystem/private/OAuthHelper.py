@@ -42,6 +42,7 @@ class OAuthHelper():
         return S_ERROR( "No token in request " )
       tokenString = oaRequest[ 'oauth_token' ]
       if checkRequestToken:
+        result = self.getRequestSecret( consumerKey, tokenString )
         checkRequest = True
         tokenType = "request"
       else:
