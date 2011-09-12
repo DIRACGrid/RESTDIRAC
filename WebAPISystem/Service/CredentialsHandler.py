@@ -17,14 +17,14 @@ class CredentialsHandler( RequestHandler ):
   ##
 
   auth_generateConsumerPair = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_generateConsumerPair = []
-  def export_generateConsumerPair( self, consumerKey = "" ):
-    return self.__credDB.generateConsumerPair( consumerKey )
+  types_generateConsumerPair = [ types.StringType, types.StringType, types.StringType ]
+  def export_generateConsumerPair( self, name, callback, icon, consumerKey = "" ):
+    return self.__credDB.generateConsumerPair( name, callback, icon, consumerKey )
 
-  auth_getConsumerSecret = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_getConsumerSecret = [ types.StringType ]
-  def export_getConsumerSecret( self, consumerKey ):
-    return self.__credDB.getConsumerSecret( consumerKey )
+  auth_getConsumerData = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getConsumerData = [ types.StringType ]
+  def export_getConsumerData( self, consumerKey ):
+    return self.__credDB.getConsumerData( consumerKey )
 
   auth_deleteConsumer = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_deleteConsumer = [ types.StringType ]
@@ -46,10 +46,10 @@ class CredentialsHandler( RequestHandler ):
   def export_generateRequest( self, consumerKey ):
     return self.__credDB.generateRequest( consumerKey )
 
-  auth_getRequestSecret = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_getRequestSecret = [ types.StringType, types.StringType ]
-  def export_getRequestSecret( self, consumerKey, request ):
-    return self.__credDB.getRequestSecret( consumerKey, request )
+  auth_getRequestData = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getRequestData = [ types.StringType ]
+  def export_getRequestData( self, request ):
+    return self.__credDB.getRequestData( request )
 
   auth_deleteRequest = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_deleteRequest = [ types.StringType ]
@@ -87,13 +87,13 @@ class CredentialsHandler( RequestHandler ):
   ##
 
 
-  auth_generateToken = [ Properties.TRUSTED_HOST ]
+  auth_generateToken = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_generateToken = ( types.StringType, types.StringType, types.StringType,
                           ( types.IntType, types.LongType ) )
   def export_generateToken( self, consumerKey, request, verifier, lifeTime ):
     return self.__credDB.generateToken( consumerKey, request, verifier, lifeTime )
 
-  auth_getTokenData = [ Properties.TRUSTED_HOST ]
+  auth_getTokenData = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_getTokenData = ( types.StringType, types.StringType )
   def export_getTokenData( self, consumerKey, token ):
     return self.__credDB.getTokenData( consumerKey, token )

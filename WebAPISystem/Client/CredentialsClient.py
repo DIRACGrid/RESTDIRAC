@@ -28,41 +28,58 @@ class CredentialsClient:
   # Consumer
   ##
 
-  def generateConsumerPair( self, consumerKey = "" ):
-    result = self.__getRPC().generateConsumerPair( consumerKey )
+  def generateConsumerPair( self, name, callback, icon, consumerKey = "" ):
+    result = self.__getRPC().generateConsumerPair( name, callback, icon, consumerKey )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
     consumerKey, secret = result[ 'Value' ]
-    self.__consumers.add( consumerKey, self.CONSUMER_GRACE_TIME, ( consumerKey, secret ) )
+    consData = { 'key': consumerKey,
+                 'name' : name,
+                 'callback' : callback,
+                 'secret' : secret,
+                 'icon' : icon }
+    self.__consumers.add( consumerKey, self.CONSUMER_GRACE_TIME, consData )
     return self.__cleanReturn( result )
 
-  def getConsumerSecret( self, consumerKey ):
+  def getConsumerData( self, consumerKey ):
     cData = self.__consumers.get( consumerKey )
     if cData:
-      return cData[1]
-    result = self.__getRPC().getConsumerSecret( consumerKey )
+      return cData
+    result = self.__getRPC().getConsumerData( consumerKey )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
-    self.__consumers.add( consumerKey, self.CONSUMER_GRACE_TIME, ( consumerKey, result[ 'Value' ] ) )
+    self.__consumers.add( consumerKey, self.CONSUMER_GRACE_TIME, result[ 'Value' ] )
     return self.__cleanReturn( result )
 
   def deleteConsumer( self, consumerKey ):
     self.__consumers.delete( consumerKey )
     result = self.__getRPC().deleteConsumer( consumerKey )
     if result[ 'OK' ]:
-      self.__cleanConsumerCache( ( consumerKey, "" ) )
+      self.__cleanConsumerCache( { 'key' : consumerKey } )
     return self.__cleanReturn( result )
 
   def getAllConsumers( self ):
     result = self.__getRPC().getAllConsumers()
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
-    for record in result[ 'Value' ]:
-      self.__consumers.add( record[0], self.CONSUMER_GRACE_TIME, record[1] )
+    data = result[ 'Value' ]
+    consIndex = { 'key': 0,
+                  'name' : 0,
+                  'callback' : 0,
+                  'secret' : 0,
+                  'icon' : 0 }
+    for key in consIndex:
+      consIndex[ key ] = data[ 'Parameters' ].find( key )
+    for record in data[ 'Records' ]:
+      consData = {}
+      for key in consIndex:
+        consData[ key ] = record[ consIndex[ key ] ]
+      print "ADD", consData
+      self.__consumers.add( consData[ 'key' ], self.CONSUMER_GRACE_TIME, consData )
     return self.__cleanReturn( result )
 
   def __cleanConsumerCache( self, cData ):
-    consumerKey = cData[0]
+    consumerKey = cData[ 'key' ]
     for dc in ( self.__tokens, self.__requests ):
       cKeys = dc.getKeys()
       for cKey in cKeys:
@@ -81,15 +98,14 @@ class CredentialsClient:
     self.__requests.add( ( consumerKey, requestPair[0] ), self.REQUEST_GRACE_TIME, requestPair[1] )
     return self.__cleanReturn( result )
 
-  def getRequestSecret( self, consumerKey, request ):
-    cKey = ( consumerKey, request )
-    secret = self.__requests.get( cKey )
-    if secret:
-      return S_OK( secret )
-    result = self.__getRPC().getRequestSecret( consumerKey, request )
+  def getRequestData( self, request ):
+    data = self.__requests.get( request )
+    if data:
+      return S_OK( data )
+    result = self.__getRPC().getRequestData( request )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
-    self.__tokens.add( cKey, result[ 'lifeTime' ] - 5, result[ 'Value' ] )
+    self.__tokens.add( request, result[ 'lifeTime' ] - 5, result[ 'Value' ] )
     return self.__cleanReturn( result )
 
   def deleteRequest( self, request ):
@@ -140,7 +156,7 @@ class CredentialsClient:
     tokenData = self.__tokens.get( cKey )
     if tokenData:
       return S_OK( tokenData )
-    result = self.__getRPC().getTokenSecret( consumerKey, token )
+    result = self.__getRPC().getTokenData( consumerKey, token )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
     tokenData = result[ 'Value' ]

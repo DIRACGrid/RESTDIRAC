@@ -81,6 +81,9 @@ class CredentialsDB( DB ):
     if 'CredDB_OAConsumers' not in tablesInDB:
       tablesD[ 'CredDB_OAConsumers' ] = { 'Fields' : { 'ConsumerKey' : 'VARCHAR(64) NOT NULL UNIQUE',
                                                        'Secret' : 'CHAR(32) NOT NULL',
+                                                       'Name' : 'VARCHAR(64) NOT NULL',
+                                                       'Callback' : 'VARCHAR(128) NOT NULL DEFAULT ""',
+                                                       'Icon' : 'VARCHAR(128) DEFAULT ""'
                                                   },
                                       'PrimaryKey' : 'ConsumerKey',
                                      }
@@ -93,9 +96,9 @@ class CredentialsDB( DB ):
   #
   #############################
 
-  def generateConsumerPair( self, consumerKey = "" ):
+  def generateConsumerPair( self, name, callback, icon, consumerKey = "" ):
     if not consumerKey:
-      consumerKey = '%s' % md5.md5( "%s|%s|%s" % ( str( self ), time.time(), random.random() ) ).hexdigest()
+      consumerKey = '%s' % md5.md5( "%s|%s|%s|%s|%s" % ( name, callback, icon, time.time(), random.random() ) ).hexdigest()
       sqlConsumerKey = '"%s"' % consumerKey
     else:
       if len( consumerKey ) > 64 or len( consumerKey ) < 5:
@@ -106,30 +109,50 @@ class CredentialsDB( DB ):
       sqlConsumerKey = result[ 'Value' ]
     secret = md5.md5( "%s|%s|%s" % ( consumerKey, time.time(), random.random() ) ).hexdigest()
     sqlSecret = '"%s"' % secret
+    result = self._escapeString( name )
+    if not result[ 'OK' ]:
+      return result
+    sqlName = result[ 'Value' ]
+    result = self._escapeString( callback )
+    if not result[ 'OK' ]:
+      return result
+    sqlCallback = result[ 'Value' ]
+    result = self._escapeString( icon )
+    if not result[ 'OK' ]:
+      return result
+    sqlIcon = result[ 'Value' ]
 
-    sqlFields = "( ConsumerKey, Secret )"
-    sqlValues = ( sqlConsumerKey, sqlSecret )
+    sqlFields = "( Name, Callback, Icon, ConsumerKey, Secret )"
+    sqlValues = ( sqlName, sqlCallback, sqlIcon, sqlConsumerKey, sqlSecret )
     sqlIn = "INSERT INTO `CredDB_OAConsumers` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
     result = self._update( sqlIn )
     if not result[ 'OK' ]:
+      if result[ 'Message' ].find( "Duplicate entry" ):
+        return S_ERROR( "Consumer already exists" )
       return result
     return S_OK( ( consumerKey, secret ) )
 
-  def getConsumerSecret( self, consumerKey ):
+  def getConsumerData( self, consumerKey ):
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
       return S_ERROR( "Consumer key doesn't have a correct size" )
     result = self._escapeString( consumerKey )
     if not result[ 'OK' ]:
       return result
     sqlConsumerKey = result[ 'Value' ]
-    sqlCmd = "SELECT Secret FROM `CredDB_OAConsumers` WHERE ConsumerKey = %s" % sqlConsumerKey
+    sqlCmd = "SELECT Secret, Name, Callback, Icon FROM `CredDB_OAConsumers` WHERE ConsumerKey = %s" % sqlConsumerKey
     result = self._query( sqlCmd )
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
     if len( data ) < 1 or len( data[0] ) < 1:
       return S_ERROR( "Unknown consumer" )
-    return S_OK( data[0][0] )
+    cData = data[0]
+    consData = { 'key' : consumerKey,
+                 'secret' : cData[0],
+                 'name' : cData[1],
+                 'callback' : cData[2],
+                 'icon' : cData[3] }
+    return S_OK( consData )
 
   def deleteConsumer( self, consumerKey ):
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
@@ -148,8 +171,12 @@ class CredentialsDB( DB ):
     return S_OK( totalDeleted )
 
   def getAllConsumers( self ):
-    sqlCmd = "SELECT ConsumerToken, Secret FROM `CredDB_OAConsumers`"
-    return self._query( sqlCmd )
+    sqlCmd = "SELECT Name, Callback, ConsumerKey, Secret, Icon FROM `CredDB_OAConsumers`"
+    result = self._query( sqlCmd )
+    if not result[ 'OK' ]:
+      return result
+    return S_OK( { 'Parameters' : [ 'name', 'callback', 'key', 'secret', 'icon' ],
+                   'Records' : result[ 'Value' ] } )
 
   #############################
   #
@@ -158,7 +185,7 @@ class CredentialsDB( DB ):
   #############################
 
   def generateRequest( self, consumerKey, lifeTime = 900 ):
-    result = self.getConsumerSecret( consumerKey )
+    result = self.getConsumerData( consumerKey )
     if not result[ 'OK' ]:
       return result
     return self.__generateRequest( consumerKey, lifeTime )
@@ -184,7 +211,7 @@ class CredentialsDB( DB ):
       return result
     return S_OK( ( request, secret ) )
 
-  def getRequestSecret( self, consumerKey, request ):
+  def getRequestData( self, request ):
 
     result = self._escapeString( request )
     if not result[ 'OK' ]:
@@ -192,23 +219,16 @@ class CredentialsDB( DB ):
       return result
     sqlRequest = result[ 'Value' ]
 
-    result = self._escapeString( consumerKey )
-    if not result[ 'OK' ]:
-      self.logger.error( result[ 'Value' ] )
-      return result
-    sqlConsumerKey = result[ 'Value' ]
-
     sqlCond = [ "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" ]
     sqlCond.append( "Request=%s" % sqlRequest )
-    sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
-    sqlSel = "SELECT Secret, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) FROM `CredDB_OARequests` WHERE %s" % " AND ".join( sqlCond )
+    sqlSel = "SELECT Secret, ConsumerKey, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) FROM `CredDB_OARequests` WHERE %s" % " AND ".join( sqlCond )
     result = self._query( sqlSel )
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
     if len( data ) and len( data[0] ):
-      result = S_OK( data[0][0] )
-      result[ 'lifeTime' ] = data[0][1]
+      result = S_OK( { 'secret' : data[0][0], 'consumerKey' : data[0][1] } )
+      result[ 'lifeTime' ] = data[0][2]
       return result
     return S_ERROR( "Request is either unknown or invalid" )
 
@@ -265,7 +285,7 @@ class CredentialsDB( DB ):
   #############################
 
   def generateVerifier( self, userDN, userGroup, consumerKey, request, lifeTime = 3600, retries = 5 ):
-    result = self.getConsumerSecret( consumerKey )
+    result = self.getConsumerData( consumerKey )
     if not result[ 'OK' ]:
       return result
     result = self.getIdentityId( userDN, userGroup )

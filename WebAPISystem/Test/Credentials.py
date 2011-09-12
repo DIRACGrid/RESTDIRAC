@@ -15,20 +15,21 @@ def testCredObj( credClient ):
   consumerKey = "dummyConsumer"
   consumerSecret = ""
   print "Checking if the consumer exists"
-  result = credClient.getConsumerSecret( consumerKey )
+  result = credClient.getConsumerData( consumerKey )
   if not result[ 'OK' ]:
     print "Creating consumer"
-    result = credClient.generateConsumerPair( consumerKey )
-    consumerSecret = checkRes( result )[1]
-  consumerSecret = result[ 'Value' ][1]
-
+    result = credClient.generateConsumerPair( "NAME", "CALLBACK", "URL", consumerKey )
+    print result
+    consumerSecret = checkRes( result )[ 1 ]
+  else:
+    consumerSecret = result[ 'Value' ][ 'secret' ]
   print " -- Testing Requests"
   print "Generating request"
   requestPair = checkRes( credClient.generateRequest( consumerKey ) )
   print "Verifying request"
-  secret = checkRes( credClient.getRequestSecret( consumerKey, requestPair[0] ) )
-  if secret != requestPair[1]:
-    raise RuntimeError( "Request secrets are different" )
+  reqData = checkRes( credClient.getRequestData( requestPair[0] ) )
+  if reqData[ 'secret' ] != requestPair[1] or reqData[ 'consumerKey' ] != consumerKey:
+    raise RuntimeError( "Request data are different" )
   print "Deleting request"
   if 1 != checkRes( credClient.deleteRequest( requestPair[0] ) ):
     raise RuntimeError( "Didn't delete the request" )
@@ -107,6 +108,7 @@ def testCredObj( credClient ):
   print "ALL OK"
 
 if __name__ == "__main__":
-  for credObj in ( CredentialsDB(), CredentialsClient() ):
+  #for credObj in ( CredentialsDB(), CredentialsClient() ):
+  for credObj in ( CredentialsClient(), ):
     print "====== TESTING %s ======" % credObj
     testCredObj( credObj )
