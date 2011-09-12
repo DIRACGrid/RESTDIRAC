@@ -95,7 +95,7 @@ class CredentialsDB( DB ):
 
   def generateConsumerPair( self, consumerKey = "" ):
     if not consumerKey:
-      consumerKey = '"%s"' % md5.md5( "%s|%s|%s" % ( str( self ), time.time(), random.random() ) ).hexdigest()
+      consumerKey = '%s' % md5.md5( "%s|%s|%s" % ( str( self ), time.time(), random.random() ) ).hexdigest()
       sqlConsumerKey = '"%s"' % consumerKey
     else:
       if len( consumerKey ) > 64 or len( consumerKey ) < 5:
