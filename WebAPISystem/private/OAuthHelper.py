@@ -6,23 +6,36 @@ import oauth2
 from DIRAC import gLogger, S_OK, S_ERROR, gConfig
 from DIRAC.Core.Security import X509Certificate
 from DIRAC.ConfigurationSystem.Client.Helpers import Registry
-from WebAPIDIRAC.WebAPISystem.Client.CredentialsClient import CredentialsClient
+from WebAPIDIRAC.WebAPISystem.Client.CredentialsWrapper import getCredentialsClient
 
 class OAuthHelper():
 
 
   def __init__( self ):
-    self.__cred = CredentialsClient()
+    self.__cred = getCredentialsClient( local = True )
     self.__oaServer = oauth2.Server()
     self.__oaServer.add_signature_method( oauth2.SignatureMethod_HMAC_SHA1() )
     self.__oaServer.add_signature_method( oauth2.SignatureMethod_PLAINTEXT() )
 
+  def getWebAuthorizationURL( self ):
+    baseURL = "http://localhost:5001"
+    return "%s/WebAPI/authorizeRequest" % baseURL
+
 
   def getConsumerSecret( self, consumerKey ):
-    return self.__cred.getConsumerSecret( consumerKey )
+    result = self.__cred.getConsumerData( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    return S_OK( result[ 'Value' ][ 'secret' ] )
+
+  def getConsumerData( self, consumerKey ):
+    return self.__cred.getConsumerData( consumerKey )
 
   def generateRequest( self, consumerKey ):
-    return self.__cred.generateRequesT( consumerKey )
+    return self.__cred.generateRequest( consumerKey )
+
+  def getRequestData( self, reqToken ):
+    return self.__cred.getRequestData( reqToken )
 
   def generateVerifier( self, consumerKey, request ):
     return self.__cred.generateVerifier( consumerKey, request )
@@ -35,10 +48,13 @@ class OAuthHelper():
 
 
   def checkRequest( self, oaRequest, checkRequest = False, checkToken = False, checkVerifier = False ):
+    if 'oauth_consumer_key' not in oaRequest:
+      return S_ERROR( "No consumer key in request" )
     consumerKey = oaRequest[ 'oauth_consumer_key' ]
-    expectedSecret = self.getConsumerSecret( consumerKey )
-    if not expectedSecret:
-      return S_ERROR( "Unknown consumer key" )
+    result = self.getConsumerSecret( consumerKey )
+    if not result[ 'OK' ]:
+      return result
+    expectedSecret = result[ 'Value' ]
     oaConsumer = oauth2.Consumer( consumerKey, expectedSecret )
 
     oaData = {}
@@ -51,19 +67,19 @@ class OAuthHelper():
         return S_ERROR( "No token in request " )
       tokenString = oaRequest[ 'oauth_token' ]
       if checkRequest:
-        type = 'request'
+        tokenType = 'request'
         result = self.__cred.getRequestSecret( consumerKey, tokenString )
         if not result[ 'OK' ]:
           return result
         expectedSecret = result[ 'Value' ]
       else:
-        type = 'token'
+        tokenType = 'token'
         result = self.__cred.getTokenData( consumerKey, tokenString )
         if not result[ 'OK' ]:
           return result
         expectedSecret = result[ 'Value' ][ 'secret' ]
       oaToken = oauth2.Token( tokenString, expectedSecret )
-      oaData[ type ] = tokenString
+      oaData[ tokenType ] = tokenString
 
     try:
       self.__oaServer.verify_request( oaRequest, oaConsumer, oaToken )

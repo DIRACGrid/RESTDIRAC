@@ -3,7 +3,7 @@ import oauth2
 import urlparse
 from DIRAC import S_OK, S_ERROR, gLogger
 
-from WebAPIDIRAC.WebAPISystem.private import OAuthHelper
+from WebAPIDIRAC.WebAPISystem.private.OAuthHelper import OAuthHelper
 
 bottle.app().catchall = False
 
@@ -52,37 +52,47 @@ def getOARequest():
 oaHelper = OAuthHelper()
 
 #Oauth flow
-@bottle.post( "/oauth/token/request" )
-@bottle.route( "/oauth/token/request" )
+@bottle.post( "/oauth/request_token" )
+@bottle.route( "/oauth/request_token" )
 def oauthRequestToken():
   oaRequest = getOARequest()
 
   result = oaHelper.checkRequest( oaRequest )
+
   if not result[ 'OK' ]:
     gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
     bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
   oaData = result[ 'Value' ]
-  tokenPair = oaHelper.generateRequest( oaData[ 'consumer' ] )
+  result = oaHelper.generateRequest( oaData[ 'consumer' ] )
+  if not result[ 'OK' ]:
+    bottle.abort( 500, result[ 'Message' ] )
+  tokenPair = result[ 'Value' ]
   reqToken = oauth2.Token( tokenPair[0], tokenPair[1] )
   return reqToken.to_string()
 
-@bottle.post( "/oauth/token/authorize" )
-@bottle.route( "/oauth/token/authorize" )
+@bottle.post( "/oauth/authorize" )
+@bottle.route( "/oauth/authorize" )
 def oauthAuthorizeToken():
   oaRequest = getOARequest()
 
-  result = oaHelper.checkRequest( oaRequest, checkRequest = True )
-  if not result[ 'OK' ]:
-    gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
-    bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
-  oaData = result[ 'Value' ]
+  #result = oaHelper.checkRequest( oaRequest, checkRequest = True )
+  #if not result[ 'OK' ]:
+  #  gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
+  #  bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
+  #oaData = result[ 'Value' ]
 
+  if 'oauth_token' in oaRequest:
+    webURL = "%s?oauth_token=%s" % ( oaHelper.getWebAuthorizationURL(), oaRequest[ 'oauth_token' ] )
+    gLogger.notice( "redirecting to %s" % webURL )
+    bottle.redirect( webURL )
+
+  bottle.abort( 400, "Missing request token" )
   #TODO: Missing userDN and userGROUp
   #TODO: This has to be done in the web
-  return oaHelper.generateRequestVerifier( oaData[ 'consumer' ], oaData[ 'request' ] )
+  #return oaHelper.generateRequestVerifier( oaData[ 'consumer' ], oaData[ 'request' ] )
 
-@bottle.post( "/oauth/token/access" )
-@bottle.route( "/oauth/token/access" )
+@bottle.post( "/oauth/access_token" )
+@bottle.route( "/oauth/access_token" )
 def oauthAccessToken():
   oaRequest = getOARequest()
 

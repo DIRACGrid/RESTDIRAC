@@ -1,9 +1,9 @@
 import bottle
-from WebAPIDIRAC.private import OAuthRoutes, Credentials
+from WebAPIDIRAC.WebAPISystem.private import OAuthRoutes
 from DIRAC.Core.Base import Script
 
 def runServer():
-  bottle.run( host = 'localhost', port = 9354, reloader = True, server = "flup" )
+  bottle.run( host = 'localhost', port = 9354, reloader = True )#, server = "flup" )
 
 @bottle.route( "/" )
 def index():
@@ -23,5 +23,6 @@ def index():
 
 
 if __name__ == "__main__":
+  Script.addDefaultOptionValue( "/DIRAC/Security/UseServerCertificate", True )
   Script.parseCommandLine()
   runServer()
