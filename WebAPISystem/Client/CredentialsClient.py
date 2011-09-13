@@ -32,19 +32,13 @@ class CredentialsClient:
     result = self.__getRPC().generateConsumerPair( name, callback, icon, consumerKey )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
-    consumerKey, secret = result[ 'Value' ]
-    consData = { 'key': consumerKey,
-                 'name' : name,
-                 'callback' : callback,
-                 'secret' : secret,
-                 'icon' : icon }
-    self.__consumers.add( consumerKey, self.CONSUMER_GRACE_TIME, consData )
+    self.__consumers.add( consumerKey, self.CONSUMER_GRACE_TIME, result[ 'Value' ] )
     return self.__cleanReturn( result )
 
   def getConsumerData( self, consumerKey ):
     cData = self.__consumers.get( consumerKey )
     if cData:
-      return cData
+      return S_OK( cData )
     result = self.__getRPC().getConsumerData( consumerKey )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
@@ -74,7 +68,6 @@ class CredentialsClient:
       consData = {}
       for key in consIndex:
         consData[ key ] = record[ consIndex[ key ] ]
-      print "ADD", consData
       self.__consumers.add( consData[ 'key' ], self.CONSUMER_GRACE_TIME, consData )
     return self.__cleanReturn( result )
 
@@ -90,12 +83,12 @@ class CredentialsClient:
   # Requests
   ##
 
-  def generateRequest( self, consumerKey ):
-    result = self.__getRPC().generateRequest( consumerKey )
+  def generateRequest( self, consumerKey, callback = "" ):
+    result = self.__getRPC().generateRequest( consumerKey, callback )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
-    requestPair = result[ 'Value' ]
-    self.__requests.add( ( consumerKey, requestPair[0] ), self.REQUEST_GRACE_TIME, requestPair[1] )
+    requestData = result[ 'Value' ]
+    self.__requests.add( requestData[ 'request' ], result[ 'lifeTime' ] - 5, requestData )
     return self.__cleanReturn( result )
 
   def getRequestData( self, request ):
@@ -122,8 +115,8 @@ class CredentialsClient:
   # Verifiers
   ##
 
-  def generateVerifier( self, userDN, userGroup, consumerKey, request ):
-    result = self.__getRPC().generateVerifier( userDN, userGroup, consumerKey, request )
+  def generateVerifier( self, consumerKey, request, userDN, userGroup, lifeTime = 3600 ):
+    result = self.__getRPC().generateVerifier( consumerKey, request, userDN, userGroup, lifeTime )
     return self.__cleanReturn( result )
 
   def getVerifierUserAndGroup( self, consumerKey, request, verifier ):
@@ -134,21 +127,28 @@ class CredentialsClient:
     result = self.__getRPC().expireVerifier( consumerKey, request, verifier )
     return self.__cleanReturn( result )
 
-  def getVerifier( self, consumerKey, request ):
-    result = self.__getRPC().getVerifier( consumerKey, request )
+  def getVerifierData( self, consumerKey, request ):
+    result = self.__getRPC().getVerifierData( consumerKey, request )
     return self.__cleanReturn( result )
+
+  def setVerifierProperties( self, consumerKey, request, verifier,
+                                 userDN, userGroup, lifeTime ):
+    result = self.__getRPC().setVerifierProperties( consumerKey, request, verifier,
+                                                  userDN, userGroup, lifeTime )
+    return self.__cleanReturn( result )
+
 
   ##
   # Tokens
   ##
 
-  def generateToken( self, consumerKey, request, verifier, lifeTime = 86400 ):
-    result = self.__getRPC().generateToken( consumerKey, request, verifier, lifeTime )
+  def generateToken( self, consumerKey, request, verifier ):
+    result = self.__getRPC().generateToken( consumerKey, request, verifier )
     if not result[ 'OK' ]:
       return self.__cleanReturn( result )
     tokenData = result[ 'Value' ]
     cKey = ( consumerKey, tokenData[ 'token' ] )
-    self.__tokens.add( cKey, lifeTime - 5, tokenData )
+    self.__tokens.add( cKey, tokenData[ 'lifeTime' ] - 5, tokenData )
     return S_OK( tokenData )
 
   def getTokenData( self, consumerKey, token ):

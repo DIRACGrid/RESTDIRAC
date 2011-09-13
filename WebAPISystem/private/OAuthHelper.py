@@ -31,17 +31,20 @@ class OAuthHelper():
   def getConsumerData( self, consumerKey ):
     return self.__cred.getConsumerData( consumerKey )
 
-  def generateRequest( self, consumerKey ):
-    return self.__cred.generateRequest( consumerKey )
+  def generateRequest( self, consumerKey, callback = "" ):
+    return self.__cred.generateRequest( consumerKey, callback )
 
   def getRequestData( self, reqToken ):
     return self.__cred.getRequestData( reqToken )
 
-  def generateVerifier( self, consumerKey, request ):
-    return self.__cred.generateVerifier( consumerKey, request )
+  def generateVerifier( self, userDN, userGroup, consumerKey, request ):
+    return self.__cred.generateVerifier( userDN, userGroup, consumerKey, request )
 
-  def generateToken( self, consumerKey, request, verifier, lifeTime = 86400 ):
-    return self.__cred.generateToken( consumerKey, request, verifier, lifeTim )
+  def setVerifierProperties( self, consumerKey, request, verifier, userDN, userGroup, lifeTime ):
+    return self.__cred.setVerifierProperties( consumerKey, request, verifier, userDN, userGroup, lifeTime )
+
+  def generateToken( self, consumerKey, request, verifier ):
+    return self.__cred.generateToken( consumerKey, request, verifier )
 
   def getTokenSecret( self, consumerKey, request ):
     return self.__cred.getRequestSecret( consumerKey, request )
@@ -68,10 +71,10 @@ class OAuthHelper():
       tokenString = oaRequest[ 'oauth_token' ]
       if checkRequest:
         tokenType = 'request'
-        result = self.__cred.getRequestSecret( consumerKey, tokenString )
+        result = self.__cred.getRequestData( tokenString )
         if not result[ 'OK' ]:
           return result
-        expectedSecret = result[ 'Value' ]
+        expectedSecret = result[ 'Value' ][ 'secret' ]
       else:
         tokenType = 'token'
         result = self.__cred.getTokenData( consumerKey, tokenString )
@@ -87,9 +90,12 @@ class OAuthHelper():
       return S_ERROR( "Invalid request: %s" % e )
 
     if checkVerifier:
-      if oaRequest['oauth_verifier'] != self.__cred.getVerifier( consumerToken, reqToken ):
-        return S_ERROR( "Invalid verifier" )
-      oaData[ 'verify' ] = oaRequest['oauth_verifier']
+      if 'oauth_verifier' not in oaRequest:
+        return S_ERROR( "No verifier provided by consumer" )
+      oaData[ 'verifier' ] = oaRequest['oauth_verifier']
+
+    if 'oauth_callback' in oaRequest:
+      oaData[ 'callback' ] = oaRequest[ 'oauth_callback' ]
 
     return S_OK( oaData )
 

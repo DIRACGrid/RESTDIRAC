@@ -53,6 +53,7 @@ class CredentialsDB( DB ):
       tablesD[ 'CredDB_OARequests' ] = { 'Fields' : { 'Request' : 'CHAR(32) NOT NULL UNIQUE',
                                                       'Secret' : 'CHAR(32) NOT NULL',
                                                       'ConsumerKey' : 'VARCHAR(64) NOT NULL',
+                                                      'Callback' : 'VARCHAR(128) NOT NULL DEFAULT ""',
                                                       'ExpirationTime' : 'DATETIME',
                                                 },
                                         'PrimaryKey' : 'Request',
@@ -130,7 +131,12 @@ class CredentialsDB( DB ):
       if result[ 'Message' ].find( "Duplicate entry" ):
         return S_ERROR( "Consumer already exists" )
       return result
-    return S_OK( ( consumerKey, secret ) )
+    consData = { 'key' : consumerKey,
+                 'secret' : secret,
+                 'name' : name,
+                 'callback' : callback,
+                 'icon' : icon }
+    return S_OK( consData )
 
   def getConsumerData( self, consumerKey ):
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
@@ -144,7 +150,7 @@ class CredentialsDB( DB ):
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
-    if len( data ) < 1 or len( data[0] ) < 1:
+    if len( data ) < 1:
       return S_ERROR( "Unknown consumer" )
     cData = data[0]
     consData = { 'key' : consumerKey,
@@ -184,13 +190,23 @@ class CredentialsDB( DB ):
   #
   #############################
 
-  def generateRequest( self, consumerKey, lifeTime = 900 ):
+  def generateRequest( self, consumerKey, callback = "", lifeTime = 900 ):
     result = self.getConsumerData( consumerKey )
     if not result[ 'OK' ]:
       return result
-    return self.__generateRequest( consumerKey, lifeTime )
+    consData = result[ 'Value' ]
+    if not consData[ 'callback' ] and not callback:
+      return S_ERROR( "Neither Consumer nor request have a callback defined" )
+    result = self.__generateRequest( consumerKey, callback, lifeTime )
+    if not result[ 'OK' ]:
+      return result
+    reqData = result[ 'Value' ]
+    reqData[ 'consumer' ] = consData
+    if not reqData[ 'callback' ]:
+      reqData[ 'callback' ] = consData[ 'callback' ]
+    return result
 
-  def __generateRequest( self, consumerKey, lifeTime, retries = 5 ):
+  def __generateRequest( self, consumerKey, callback, lifeTime, retries = 5 ):
     request = md5.md5( "%s|%s|%s" % ( consumerKey, time.time(), random.random() ) ).hexdigest()
     secret = md5.md5( "%s|%s|%s" % ( request, time.time(), random.random() ) ).hexdigest()
     if len( consumerKey ) > 64 or len( consumerKey ) < 5:
@@ -200,16 +216,29 @@ class CredentialsDB( DB ):
       return result
     sqlConsumerKey = result[ 'Value' ]
 
-    sqlFields = "( Request, Secret, ConsumerKey, ExpirationTime )"
+    sqlFields = [ "Request", "Secret", "ConsumerKey", "ExpirationTime" ]
     sqlValues = [ "'%s'" % request, "'%s'" % secret, sqlConsumerKey,
                  "TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime ]
-    sqlIn = "INSERT INTO `CredDB_OARequests` %s VALUES ( %s )" % ( sqlFields, ",".join( sqlValues ) )
+
+    if callback:
+      result = self._escapeString( callback )
+      if not result[ 'OK' ]:
+        return result
+      sqlFields.append( "Callback" )
+      sqlValues.append( result[ 'Value' ] )
+
+    sqlIn = "INSERT INTO `CredDB_OARequests` ( %s ) VALUES ( %s )" % ( ",".join( sqlFields ),
+                                                                       ",".join( sqlValues ) )
     result = self._update( sqlIn )
     if not result[ 'OK' ]:
       if result[ 'Message' ].find( "Duplicate key" ) > -1 and retries > 0 :
-        return self.__generateRequest( consumerKey, retries - 1 )
+        return self.__generateRequest( consumerKey, callback, lifeTime, retries - 1 )
       return result
-    return S_OK( ( request, secret ) )
+    result = S_OK( { 'request' : request,
+                     'secret' : secret,
+                     'callback' : callback } )
+    result[ 'lifeTime' ] = lifeTime
+    return result
 
   def getRequestData( self, request ):
 
@@ -221,16 +250,30 @@ class CredentialsDB( DB ):
 
     sqlCond = [ "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" ]
     sqlCond.append( "Request=%s" % sqlRequest )
-    sqlSel = "SELECT Secret, ConsumerKey, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) FROM `CredDB_OARequests` WHERE %s" % " AND ".join( sqlCond )
+    sqlSel = "SELECT Secret, ConsumerKey, Callback, TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) FROM `CredDB_OARequests` WHERE %s" % " AND ".join( sqlCond )
     result = self._query( sqlSel )
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
-    if len( data ) and len( data[0] ):
-      result = S_OK( { 'secret' : data[0][0], 'consumerKey' : data[0][1] } )
-      result[ 'lifeTime' ] = data[0][2]
+    if len( data ) == 0:
+      return S_ERROR( "Request is either unknown or invalid" )
+
+    reqData = { 'request' : request,
+                'secret' : data[0][0],
+                'callback' : data[0][2] }
+
+    result = self.getConsumerData( data[0][1] )
+    if not result[ 'OK' ]:
       return result
-    return S_ERROR( "Request is either unknown or invalid" )
+    consData = result[ 'Value' ]
+    reqData[ 'consumer' ] = consData
+    if not reqData[ 'callback' ]:
+      reqData[ 'callback' ] = consData[ 'callback' ]
+
+    result = S_OK( reqData )
+    result[ 'lifeTime' ] = data[0][3]
+    return result
+
 
   def deleteRequest( self, request ):
     result = self._escapeString( request )
@@ -284,7 +327,7 @@ class CredentialsDB( DB ):
   #
   #############################
 
-  def generateVerifier( self, userDN, userGroup, consumerKey, request, lifeTime = 3600, retries = 5 ):
+  def generateVerifier( self, consumerKey, request, userDN, userGroup, lifeTime = 3600, retries = 5 ):
     result = self.getConsumerData( consumerKey )
     if not result[ 'OK' ]:
       return result
@@ -378,19 +421,50 @@ class CredentialsDB( DB ):
       return result
     return S_OK()
 
-  def getVerifier( self, consumerKey, request ):
+  def getVerifierData( self, consumerKey, request ):
     result = self.__verifierCondition( consumerKey, request )
     if not result[ 'OK' ]:
       return result
     sqlCond = result[ 'Value' ]
-    sqlCmd = "SELECT Verifier FROM `CredDB_OAVerifier` WHERE %s" % " AND ".join( sqlCond )
+    sqlFields = [ "Verifier", "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime )", "UserId" ]
+    sqlCmd = "SELECT %s FROM `CredDB_OAVerifier` WHERE %s" % ( ", ".join( sqlFields ), " AND ".join( sqlCond ) )
     result = self._query( sqlCmd )
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
     if len( data ) < 1 or len( data[0] ) < 1:
       return S_ERROR( "Unknown verifier" )
-    return S_OK( data[0][0] )
+    verData = { 'verifier' : data[0][0],
+                'lifeTime' : data[0][1],
+                'userId' : data[0][2] }
+    result = self.__getUserAndGroup( data[0][2] )
+    if not result[ 'OK' ]:
+      return result
+    verData[ 'userDN'] = result['Value' ][0]
+    verData[ 'userGroup'] = result['Value' ][1]
+    return S_OK( verData )
+
+  def setVerifierProperties( self, consumerKey, request, verifier, userDN, userGroup, lifeTime ):
+    result = self.__getVerifierUserID( consumerKey, request, verifier )
+    if not result[ 'OK' ]:
+      return result
+    userId = result[ 'Value' ]
+    sqlUp = [ 'UserId = %d' % userId ]
+    try:
+      sqlUp.append( "Expirationtime = TIMESTAMPADD( SECOND, %d, UTC_TIMESTAMP() )" % lifeTime )
+    except ValueError:
+      return S_ERROR( "LifeTime has to be an integer" )
+    result = self.__verifierCondition( consumerKey, request )
+    if not result[ 'OK' ]:
+      return result
+    sqlCond = result[ 'Value' ]
+    result = self._update( "UPDATE `CredDB_OAVerifier` SET %s WHERE %s" % ( ", ".join( sqlUp ),
+                                                                            " AND ".join( sqlCond ) ) )
+    if not result[ 'OK' ]:
+      return result
+    if result[ 'Value' ] == 0:
+      return S_ERROR( "Unknown verifier" )
+    return result
 
   #############################
   #
@@ -398,29 +472,25 @@ class CredentialsDB( DB ):
   #
   #############################
 
-  def generateToken( self, consumerKey, request, verifier, lifeTime = 86400 ):
-    result = self.__getVerifierUserID( consumerKey, request, verifier )
+  def generateToken( self, consumerKey, request, verifier ):
+    result = self.getVerifierData( consumerKey, request )
     if not result[ 'OK' ]:
       return result
-    userId = result[ 'Value' ]
-    try:
-      lifeTime = int( lifeTime )
-    except ValueError:
+    verData = result[ 'Value' ]
+    print verData[ 'verifier' ], verifier
+    if verData[ 'verifier' ] != verifier:
+      return S_ERROR( "Verifier %s is unknown" % verifier )
+    if verData[ 'lifeTime' ] < 0:
       return S_ERROR( "Life time has to be a positive integer" )
-    if lifeTime < 0:
-      return S_ERROR( "Life time has to be a positive integer" )
-    result = self.__generateToken( userId, consumerKey, lifeTime )
+    result = self.__generateToken( verData[ 'userId' ], consumerKey, verData[ 'lifeTime' ] )
     if not result[ 'OK' ]:
       return result
     tokenData = { 'token' : result[ 'Value' ][0],
-                  'secret' : result[ 'Value'][1]
+                  'secret' : result[ 'Value'][1],
+                  'userDN' : verData[ 'userDN' ],
+                  'userGroup' : verData[ 'userGroup' ],
+                  'lifeTime' : verData[ 'lifeTime' ]
                 }
-    result = self.__getUserAndGroup( userId )
-    if not result[ 'OK' ]:
-      gLogger.fatal( "UserId %s has no identity" % userId )
-      return S_ERROR( "User is not known" )
-    tokenData[ 'userDN'] = result['Value' ][0]
-    tokenData[ 'userGroup'] = result['Value' ][1]
 
     self.expireVerifier( consumerKey, verifier, request )
 
@@ -471,7 +541,8 @@ class CredentialsDB( DB ):
     data = result[ 'Value' ]
     if len( data ) < 1 or len( data[0] ) < 1:
       return S_ERROR( "Unknown token" )
-    tokenData = { 'secret' : data[0][0],
+    tokenData = { 'token' : token,
+                  'secret' : data[0][0],
                   'lifeTime' : data[0][1] }
     result = self.__getUserAndGroup( data[0][2] )
     if not result[ 'OK' ]:

@@ -32,9 +32,6 @@ class Params:
     if not self.name:
       gLogger.error( "Missing consumer name" )
       return False
-    if not self.callback:
-      gLogger.error( "Missing consumer callback" )
-      return False
     return True
 
 def registerConsumer( params ):
@@ -47,7 +44,11 @@ def registerConsumer( params ):
   if not result[ 'OK' ]:
     gLogger.error( "Could not register a new consumer", result[ 'Message' ] )
     return False
-  gLogger.notice( "New consumer:\n\tKey    %s\n\tSecret %s" % result[ 'Value' ] )
+  data = result[ 'Value' ]
+  gLogger.notice( "New consumer:" )
+  for k in sorted( data ):
+    if data[ k ]:
+      gLogger.notice( "\t %s = %s" % ( k.capitalize().ljust( 10 ), data[k] ) )
   return True
 
 

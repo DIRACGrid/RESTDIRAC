@@ -2,6 +2,7 @@ import logging
 import time
 import random
 import oauth2
+import urllib
 
 try:
   from hashlib import md5
@@ -44,35 +45,43 @@ class WebapiController( BaseController ):
       c.error = result[ 'Message' ]
       return render( "/error.mako" )
     reqData = result[ 'Value' ]
+    consData = reqData[ 'consumer' ]
     print reqData
-    result = self.oaHelper.getConsumerData( reqData[ 'consumerKey' ] )
+    print consData
+    result = self.oaHelper.generateVerifier( consData[ 'key' ],
+                                             reqData[ 'request' ], c.userDN, c.userGroup )
     if not result[ 'OK' ]:
       c.error = result[ 'Message' ]
       return render( "/error.mako" )
-    consData = result[ 'Value' ]
+    verifier = result[ 'Value' ]
+
     c.consName = consData[ 'name' ]
     c.consImg = consData[ 'icon' ]
     c.userDN = getUserDN()
     c.userGroup = getSelectedGroup()
     c.request = requestToken
-    c.ticket = md5( "%s%s%s%s" % ( str( consData ), requestToken, time.time(), random.random() ) ).hexdigest()
-    session[ 'oaAuthTicket' ] = c.ticket
+    c.verifier = verifier
+
+    if 'oauth_callback' in oaRequest:
+      c.callback = oaRequest[ 'oauth_callback' ]
+    else:
+      c.callback = reqData[ 'callback' ]
+    c.callback = urllib.quote_plus( c.callback )
+
     return render( "/WebAPI/authorizeRequest.mako" )
 
   def __denyAccess( self ):
     pass
 
   def grantAccess( self ):
-    if 'grant' not in request.params or str( request.params[ 'grant' ] ) != "true":
+    if 'grant' not in request.params or str( request.params[ 'grant' ] ) != "Grant":
+      log.info( "Access denied for token" )
       self.__denyAccess()
       return defaultRedirect()
     try:
       requestToken = str( request.params[ 'request' ] )
-    except KeyError:
-      self.__denyAccess()
-      return defaultRedirect()
-    try:
       lifeTime = int( request.params[ 'accessTime' ] ) * 3600
+      verifier = request.params[ 'verifier' ]
     except:
       self.__denyAccess()
       return defaultRedirect()
@@ -81,22 +90,23 @@ class WebapiController( BaseController ):
       c.error = result[ 'Message' ]
       return render( "/error.mako" )
     reqData = result[ 'Value' ]
-    print reqData
-    result = self.oaHelper.getConsumerData( reqData[ 'consumerKey' ] )
-    if not result[ 'OK' ]:
-      c.error = result[ 'Message' ]
-      return render( "/error.mako" )
-    consData = result[ 'Value' ]
-    result = oaHelper.generateRequestVerifier( reqData[ 'consumerKey' ], requestToken )
+    consData = reqData[ 'consumer' ]
+    result = self.oaHelper.setVerifierProperties( consData[ 'key' ], reqData[ 'request' ], verifier,
+                                                  getUserDN(), getSelectedGroup(), lifeTime )
     if not result['OK']:
       c.error = result[ 'Message' ]
       return render( "/error.mako" )
-    verifier = result[ 'Value' ]
+
     oaConsumer = oauth2.Consumer( consData[ 'key' ], consData[ 'secret' ] )
-    oaToken = oauth2.Token( requestToken, reqData[ 'secret' ] )
+    oaToken = oauth2.Token( reqData[ 'request' ], reqData[ 'secret' ] )
     oaToken.set_verifier( verifier )
-    oaRequest = oauth2.Request.from_consumer_and_token( oaConsumer, oaToken, http_method = 'GET', http_url = consData[ 'callback' ] )
+
+    oaRequest = oauth2.Request.from_consumer_and_token( oaConsumer,
+                                                        oaToken,
+                                                        http_method = 'GET',
+                                                        http_url = reqData[ 'callback' ] )
     oaRequest.sign_request( oauth2.SignatureMethod_HMAC_SHA1(), oaConsumer, oaToken )
-    return redirect( oaRequest.to_url() )
+
+    return redirect_to( str( oaRequest.to_url() ) )
 
 

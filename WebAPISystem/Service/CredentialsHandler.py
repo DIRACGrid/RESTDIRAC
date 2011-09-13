@@ -42,9 +42,9 @@ class CredentialsHandler( RequestHandler ):
   ##
 
   auth_generateRequest = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_generateRequest = [ types.StringType ]
-  def export_generateRequest( self, consumerKey ):
-    return self.__credDB.generateRequest( consumerKey )
+  types_generateRequest = [ types.StringType, types.StringType ]
+  def export_generateRequest( self, consumerKey, callback ):
+    return self.__credDB.generateRequest( consumerKey, callback )
 
   auth_getRequestData = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_getRequestData = [ types.StringType ]
@@ -62,9 +62,10 @@ class CredentialsHandler( RequestHandler ):
 
   auth_generateVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_generateVerifier = ( types.StringType, types.StringType,
-                             types.StringType, types.StringType )
-  def export_generateVerifier( self, userDN, userGroup, consumerKey, request ):
-    return self.__credDB.generateVerifier( userDN, userGroup, consumerKey, request )
+                             types.StringType, types.StringType,
+                            ( types.IntType, types.LongType ) )
+  def export_generateVerifier( self, consumerKey, request, userDN, userGroup, lifeTime ):
+    return self.__credDB.generateVerifier( consumerKey, request, userDN, userGroup, lifeTime )
 
   auth_getVerifierUserAndGroup = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_getVerifierUserAndGroup = ( types.StringType, types.StringType, types.StringType )
@@ -76,10 +77,19 @@ class CredentialsHandler( RequestHandler ):
   def export_expireVerifier( self, consumerKey, request, verifier ):
     return self.__credDB.expireVerifier( consumerKey, request, verifier )
 
-  auth_getVerifier = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_getVerifier = ( types.StringType, types.StringType )
-  def export_getVerifier( self, consumerKey, request ):
-    return self.__credDB.getVerifier( consumerKey, request )
+  auth_getVerifierData = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_getVerifierData = ( types.StringType, types.StringType )
+  def export_getVerifierData( self, consumerKey, request ):
+    return self.__credDB.getVerifierData( consumerKey, request )
+
+  auth_setVerifierProperties = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
+  types_setVerifierProperties = ( types.StringType, types.StringType, types.StringType,
+                                  types.StringType, types.StringType,
+                                  ( types.IntType, types.LongType ) )
+  def export_setVerifierProperties( self, consumerKey, request, verifier,
+                                          userDN, userGroup, lifeTime ):
+    return self.__credDB.setVerifierProperties( consumerKey, request, verifier,
+                                                userDN, userGroup, lifeTime )
 
 
   ##
@@ -88,10 +98,9 @@ class CredentialsHandler( RequestHandler ):
 
 
   auth_generateToken = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
-  types_generateToken = ( types.StringType, types.StringType, types.StringType,
-                          ( types.IntType, types.LongType ) )
-  def export_generateToken( self, consumerKey, request, verifier, lifeTime ):
-    return self.__credDB.generateToken( consumerKey, request, verifier, lifeTime )
+  types_generateToken = ( types.StringType, types.StringType, types.StringType )
+  def export_generateToken( self, consumerKey, request, verifier ):
+    return self.__credDB.generateToken( consumerKey, request, verifier )
 
   auth_getTokenData = [ Properties.TRUSTED_HOST, Properties.SERVICE_ADMINISTRATOR ]
   types_getTokenData = ( types.StringType, types.StringType )
