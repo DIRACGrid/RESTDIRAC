@@ -48,25 +48,25 @@ def testCredObj( credClient ):
   print "Requesting verifier"
   reqData = checkRes( credClient.generateRequest( consumerKey ) )
   verifier = checkRes( credClient.generateVerifier( consumerKey, reqData[ 'request' ], userDN, userGroup ) )
-  print "Checking user"
-  if ( userDN, userGroup ) != checkRes( credClient.getVerifierUserAndGroup( consumerKey, reqData[ 'request' ], verifier ) ):
+  print "Checking verifier"
+  verData = checkRes( credClient.getVerifierData( verifier ) )
+  #Don't check lifetime nor userId
+  verData.pop( 'lifeTime' )
+  verData.pop( 'userId' )
+  expectedData = { 'consumerKey': consumerKey,
+                   'request': reqData[ 'request' ],
+                   'userDN': userDN, 'userGroup': userGroup }
+  if verData != expectedData:
     raise RuntimeError( "Users are different for verifier" )
   print "Checking verifier"
-  if verifier != checkRes( credClient.getVerifierData( consumerKey, reqData[ 'request' ] ) )[ 'verifier' ]:
+  if verifier != checkRes( credClient.findVerifier( consumerKey, reqData[ 'request' ] ) )[ 'verifier' ]:
     raise RuntimeError( "Different verifier returned" )
   print "Changing lifetime"
   if checkRes( credClient.setVerifierProperties( consumerKey, reqData[ 'request' ], verifier,
                                               userDN, userGroup, 86400 ) ) != 1:
     raise RuntimeError( "Did not modify the verifier" )
-  print "Trying to expire with different consumer"
-  result = credClient.expireVerifier( "ASD%s" % consumerKey, reqData[ 'request' ], verifier )
-  if result[ 'OK' ]:
-    raise RuntimeError( "Validated invalid verifier" )
-  else:
-    print "Not validated with: %s" % result[ 'Message' ]
-  print "Expiring it"
-  checkRes( credClient.expireVerifier( consumerKey, reqData[ 'request' ], verifier ) )
-
+  print "Deleting verifier"
+  print checkRes( credClient.deleteVerifier( verifier ) )
   print " -- Testing tokens"
   print "Generating a new token"
   reqData = checkRes( credClient.generateRequest( consumerKey ) )
@@ -114,15 +114,15 @@ def testCredObj( credClient ):
     raise RuntimeError( "Token could be retrieved!" )
   print "Token was deleted :)"
   print "Trying to retrieve verifier"
-  result = credClient.expireVerifier( consumerKey, reqData[ 'request' ], verifier )
+  result = credClient.deleteVerifier( verifier )
   if result[ 'OK' ]:
     raise RuntimeError( "Verifier could be retrieved!" )
   print "Verifier was deleted :)"
   print "ALL OK"
 
 if __name__ == "__main__":
-  #for credObj in ( CredentialsDB(), CredentialsClient() ):
+  for credObj in ( CredentialsDB(), CredentialsClient() ):
   #for credObj in ( CredentialsDB(), ):
-  for credObj in ( CredentialsClient(), ):
+  #for credObj in ( CredentialsClient(), ):
     print "====== TESTING %s ======" % credObj
     testCredObj( credObj )

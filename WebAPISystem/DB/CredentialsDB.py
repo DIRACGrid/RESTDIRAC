@@ -359,21 +359,24 @@ class CredentialsDB( DB ):
       return result
     return S_OK( verifier )
 
-  def __verifierCondition( self, consumerKey, request, verifier = "" ):
+  def __verifierCondition( self, consumerKey = "", request = "", verifier = "" ):
     sqlCond = [ "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime ) > 0" ]
-    if len( consumerKey ) > 64 or len( consumerKey ) < 5:
-      return S_ERROR( "Consumer key doesn't have a correct size" )
-    result = self._escapeString( consumerKey )
-    if not result[ 'OK' ]:
-      return result
-    sqlConsumerKey = result[ 'Value' ]
-    sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
 
-    result = self._escapeString( request )
-    if not result[ 'OK' ]:
-      return result
-    sqlRequest = result[ 'Value' ]
-    sqlCond.append( "Request=%s" % sqlRequest )
+    if consumerKey:
+      if len( consumerKey ) > 64 or len( consumerKey ) < 5:
+        return S_ERROR( "Consumer key doesn't have a correct size" )
+      result = self._escapeString( consumerKey )
+      if not result[ 'OK' ]:
+        return result
+      sqlConsumerKey = result[ 'Value' ]
+      sqlCond.append( "ConsumerKey=%s" % sqlConsumerKey )
+
+    if request:
+      result = self._escapeString( request )
+      if not result[ 'OK' ]:
+        return result
+      sqlRequest = result[ 'Value' ]
+      sqlCond.append( "Request=%s" % sqlRequest )
 
     if verifier:
       result = self._escapeString( verifier )
@@ -384,29 +387,34 @@ class CredentialsDB( DB ):
 
     return S_OK( sqlCond )
 
-  def __getVerifierUserID( self, consumerKey, request, verifier ):
-    result = self.__verifierCondition( consumerKey, request, verifier )
+  def getVerifierData( self, verifier ):
+    result = self.__verifierCondition( verifier = verifier )
     if not result[ 'OK' ]:
       return result
     sqlCond = result[ 'Value' ]
-    sqlCmd = "SELECT UserId FROM `CredDB_OAVerifier` WHERE %s" % " AND ".join( sqlCond )
+    sqlFields = [ "UserId", "ConsumerKey", "Request", "TIMESTAMPDIFF( SECOND, UTC_TIMESTAMP(), ExpirationTime )" ]
+    sqlCmd = "SELECT %s FROM `CredDB_OAVerifier` WHERE %s" % ( ", ".join( sqlFields ),
+                                                              " AND ".join( sqlCond ) )
     result = self._query( sqlCmd )
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
-    if len( data ) < 1 or len( data[0] ) < 1:
+    if len( data ) == 0:
       return S_ERROR( "Unknown verifier" )
-    return S_OK( data[0] )
-
-  def getVerifierUserAndGroup( self, consumerKey, request, verifier ):
-    result = self.__getVerifierUserID( consumerKey, request, verifier )
+    verData = { 'consumerKey' : data[0][1],
+                'request' : data[0][2],
+                'lifeTime' : data[0][3],
+                'userId' : data[0][0] }
+    result = self.__getUserAndGroup( data[0][0] )
     if not result[ 'OK' ]:
       return result
-    userId = result[ 'Value' ]
-    return self.__getUserAndGroup( userId )
+    data = result[ 'Value' ]
+    verData[ 'userDN' ] = data[0]
+    verData[ 'userGroup' ] = data[1]
+    return S_OK( verData )
 
-  def expireVerifier( self, consumerKey, request, verifier ):
-    result = self.__verifierCondition( consumerKey, request, verifier )
+  def deleteVerifier( self, verifier ):
+    result = self.__verifierCondition( verifier = verifier )
     if not result[ 'OK' ]:
       return result
     sqlCond = result[ 'Value' ]
@@ -416,12 +424,9 @@ class CredentialsDB( DB ):
       return result
     if result[ 'Value' ] < 1:
       return S_ERROR( "Verifier is unknown" )
-    result = self.deleteRequest( request )
-    if not result[ 'OK' ]:
-      return result
     return S_OK()
 
-  def getVerifierData( self, consumerKey, request ):
+  def findVerifier( self, consumerKey, request ):
     result = self.__verifierCondition( consumerKey, request )
     if not result[ 'OK' ]:
       return result
@@ -445,8 +450,9 @@ class CredentialsDB( DB ):
     return S_OK( verData )
 
   def setVerifierProperties( self, consumerKey, request, verifier, userDN, userGroup, lifeTime ):
-    result = self.__getVerifierUserID( consumerKey, request, verifier )
+    result = self.getIdentityId( userDN, userGroup )
     if not result[ 'OK' ]:
+      self.logger.error( result[ 'Value' ] )
       return result
     userId = result[ 'Value' ]
     sqlUp = [ 'UserId = %d' % userId ]
@@ -473,13 +479,12 @@ class CredentialsDB( DB ):
   #############################
 
   def generateToken( self, consumerKey, request, verifier ):
-    result = self.getVerifierData( consumerKey, request )
+    result = self.getVerifierData( verifier )
     if not result[ 'OK' ]:
       return result
     verData = result[ 'Value' ]
-    print verData[ 'verifier' ], verifier
-    if verData[ 'verifier' ] != verifier:
-      return S_ERROR( "Verifier %s is unknown" % verifier )
+    if verData[ 'consumerKey' ] != consumerKey or verData[ 'request' ] != request:
+      return S_ERROR( "Verifier %s is not associated to this request/consumer" % verifier )
     if verData[ 'lifeTime' ] < 0:
       return S_ERROR( "Life time has to be a positive integer" )
     result = self.__generateToken( verData[ 'userId' ], consumerKey, verData[ 'lifeTime' ] )
@@ -492,7 +497,7 @@ class CredentialsDB( DB ):
                   'lifeTime' : verData[ 'lifeTime' ]
                 }
 
-    self.expireVerifier( consumerKey, verifier, request )
+    self.deleteVerifier( verifier )
 
     return S_OK( tokenData )
 

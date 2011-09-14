@@ -1,67 +1,94 @@
 
-import bottle
 import urlparse
 import oauth2
+import threading
 
 from DIRAC import gLogger, S_OK, S_ERROR, gConfig
-from DIRAC.Core.Security import X509Certificate
-from DIRAC.ConfigurationSystem.Client.Helpers import Registry
 from WebAPIDIRAC.WebAPISystem.Client.CredentialsWrapper import getCredentialsClient
 
-class OAuthHelper():
 
+class OAData( threading.local ):
 
   def __init__( self ):
-    self.__cred = getCredentialsClient( local = True )
+    self.__oaData = {}
+
+  def bind( self, oaData ):
+    self.__oaData = oaData
+
+  def __inOAData ( self, key ):
+    if key in self.__oaData:
+      return str( self.__oaData[ key ] )
+    return False
+
+  @property
+  def consumerKey( self ):
+    return self.__inOAData( 'consumer_key' )
+
+  @property
+  def consumerSecret( self ):
+    return self.__inOAData( 'consumer_secret' )
+
+  @property
+  def token( self ):
+    return self.__inOAData( 'token' )
+
+  @property
+  def tokenSecret( self ):
+    return self.__inOAData( 'token_secret' )
+
+  @property
+  def requestToken( self ):
+    return self.__inOAData( 'request_token' )
+
+  @property
+  def requestSecret( self ):
+    return self.__inOAData( 'request_secret' )
+
+  @property
+  def accessToken( self ):
+    return self.__inOAData( 'access_token' )
+
+  @property
+  def accessSecret( self ):
+    return self.__inOAData( 'access_secret' )
+
+  @property
+  def verifier( self ):
+    return self.__inOAData( 'verifier' )
+
+  @property
+  def callback( self ):
+    return self.__inOAData( 'callback' )
+
+
+
+class OAManager( object ):
+
+  def __init__( self ):
+    self.__cred = getCredentialsClient()
     self.__oaServer = oauth2.Server()
     self.__oaServer.add_signature_method( oauth2.SignatureMethod_HMAC_SHA1() )
     self.__oaServer.add_signature_method( oauth2.SignatureMethod_PLAINTEXT() )
 
-  def getWebAuthorizationURL( self ):
-    baseURL = "http://localhost:5001"
-    return "%s/WebAPI/authorizeRequest" % baseURL
+  @property
+  def credentials( self ):
+    return self.__cred
 
-
-  def getConsumerSecret( self, consumerKey ):
-    result = self.__cred.getConsumerData( consumerKey )
-    if not result[ 'OK' ]:
-      return result
-    return S_OK( result[ 'Value' ][ 'secret' ] )
-
-  def getConsumerData( self, consumerKey ):
-    return self.__cred.getConsumerData( consumerKey )
-
-  def generateRequest( self, consumerKey, callback = "" ):
-    return self.__cred.generateRequest( consumerKey, callback )
-
-  def getRequestData( self, reqToken ):
-    return self.__cred.getRequestData( reqToken )
-
-  def generateVerifier( self, userDN, userGroup, consumerKey, request ):
-    return self.__cred.generateVerifier( userDN, userGroup, consumerKey, request )
-
-  def setVerifierProperties( self, consumerKey, request, verifier, userDN, userGroup, lifeTime ):
-    return self.__cred.setVerifierProperties( consumerKey, request, verifier, userDN, userGroup, lifeTime )
-
-  def generateToken( self, consumerKey, request, verifier ):
-    return self.__cred.generateToken( consumerKey, request, verifier )
-
-  def getTokenSecret( self, consumerKey, request ):
-    return self.__cred.getRequestSecret( consumerKey, request )
-
-
-  def checkRequest( self, oaRequest, checkRequest = False, checkToken = False, checkVerifier = False ):
+  def authorizeFlow( self, oaRequest = False, checkRequest = False, checkToken = False, checkVerifier = False ):
+    if not oaRequest:
+      oaRequest = self.parse()
     if 'oauth_consumer_key' not in oaRequest:
       return S_ERROR( "No consumer key in request" )
     consumerKey = oaRequest[ 'oauth_consumer_key' ]
-    result = self.getConsumerSecret( consumerKey )
+    result = self.__cred.getConsumerData( str( consumerKey ) )
     if not result[ 'OK' ]:
       return result
-    expectedSecret = result[ 'Value' ]
+    expectedSecret = result[ 'Value' ][ 'secret' ]
     oaConsumer = oauth2.Consumer( consumerKey, expectedSecret )
 
     oaData = {}
-    oaData[ 'consumer' ] = consumerKey
+    oaData[ 'consumer_key' ] = consumerKey
+    oaData[ 'consumer_secret ' ] = expectedSecret
 
     oaToken = False
 
@@ -76,26 +103,59 @@ class OAuthHelper():
           return result
         expectedSecret = result[ 'Value' ][ 'secret' ]
       else:
-        tokenType = 'token'
+        tokenType = 'access'
         result = self.__cred.getTokenData( consumerKey, tokenString )
         if not result[ 'OK' ]:
           return result
         expectedSecret = result[ 'Value' ][ 'secret' ]
       oaToken = oauth2.Token( tokenString, expectedSecret )
-      oaData[ tokenType ] = tokenString
+      oaData[ "%s_token" % tokenType ] = tokenString
+      oaData[ "token" ] = tokenString
+      oaData[ "secret" ] = expectedSecret
 
     try:
       self.__oaServer.verify_request( oaRequest, oaConsumer, oaToken )
     except oauth2.Error, e:
       return S_ERROR( "Invalid request: %s" % e )
 
+    for key in ( 'verifier', 'callback' ):
+      oakey = "oauth_%s" % key
+      if oakey in oaRequest:
+        oaData[ key ] = oaRequest[ oakey ]
+
     if checkVerifier:
       if 'oauth_verifier' not in oaRequest:
         return S_ERROR( "No verifier provided by consumer" )
-      oaData[ 'verifier' ] = oaRequest['oauth_verifier']
 
-    if 'oauth_callback' in oaRequest:
-      oaData[ 'callback' ] = oaRequest[ 'oauth_callback' ]
+    gOAData.bind( oaData )
 
-    return S_OK( oaData )
+    return S_OK( gOAData )
 
+  def parse( self, method, url, headers, parameters, query_string ):
+
+    oaRequest = oauth2.Request.from_request( method,
+                                             url,
+                                             headers,
+                                             parameters,
+                                             query_string )
+    oaData = {}
+    for key in ( 'consumer_key', 'callback', 'verifier', 'token' ):
+      oakey = "oauth_%s" % key
+      if oakey in oaRequest:
+        oaData[ key ] = oaRequest[ oakey ]
+    gOAData.bind( oaData )
+
+    return oaRequest
+
+  def notAuthorized( self ):
+    raise RuntimeError( "Not authorized" )
+
+  def authorize( self, funct ):
+    oaRequest = self.parse()
+    result = self.checkRequest( oaRequest, checkToken = True )
+    if not result[ 'OK' ]:
+      return self.notAuthorized
+
+
+gOAManager = OAManager()
+gOAData = OAData()

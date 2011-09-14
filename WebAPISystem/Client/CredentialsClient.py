@@ -119,16 +119,16 @@ class CredentialsClient:
     result = self.__getRPC().generateVerifier( consumerKey, request, userDN, userGroup, lifeTime )
     return self.__cleanReturn( result )
 
-  def getVerifierUserAndGroup( self, consumerKey, request, verifier ):
-    result = self.__getRPC().getVerifierUserAndGroup( consumerKey, request, verifier )
+  def getVerifierData( self, verifier ):
+    result = self.__getRPC().getVerifierData( verifier )
     return self.__cleanReturn( result )
 
-  def expireVerifier( self, consumerKey, request, verifier ):
-    result = self.__getRPC().expireVerifier( consumerKey, request, verifier )
+  def deleteVerifier( self, verifier ):
+    result = self.__getRPC().deleteVerifier( verifier )
     return self.__cleanReturn( result )
 
-  def getVerifierData( self, consumerKey, request ):
-    result = self.__getRPC().getVerifierData( consumerKey, request )
+  def findVerifier( self, consumerKey, request ):
+    result = self.__getRPC().findVerifier( consumerKey, request )
     return self.__cleanReturn( result )
 
   def setVerifierProperties( self, consumerKey, request, verifier,

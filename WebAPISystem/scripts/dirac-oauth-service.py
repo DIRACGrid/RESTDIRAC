@@ -1,6 +1,8 @@
-import bottle
-from WebAPIDIRAC.WebAPISystem.private import OAuthRoutes
+import bottle, sys
+from WebAPIDIRAC.WebAPISystem.private.routes import OAuthRoutes
+import WebAPIDIRAC.ConfigurationSystem.Client.Helpers.WebAPI as WebAPICS
 from DIRAC.Core.Base import Script
+from DIRAC import gLogger
 
 def runServer():
   bottle.run( host = 'localhost', port = 9354, reloader = True )#, server = "flup" )
@@ -25,4 +27,9 @@ def index():
 if __name__ == "__main__":
   Script.addDefaultOptionValue( "/DIRAC/Security/UseServerCertificate", True )
   Script.parseCommandLine()
+  result = WebAPICS.isOK()
+  if not result[ 'OK' ]:
+    gLogger.fatal( result[ 'Message' ] )
+    sys.exit( 1 )
+
   runServer()

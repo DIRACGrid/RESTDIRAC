@@ -7,6 +7,7 @@
 htmlCode = "<form action='grantAccess' method='post'>"
 htmlCode += "<input type='hidden' name='verifier' value='%s'/>" % c.verifier
 htmlCode += "<input type='hidden' name='request' value='%s'/>" % c.request
+htmlCode += "<input type='hidden' name='consumerKey' value='%s'/>" % c.consumerKey
 htmlCode += "<input type='hidden' name='callback' value='%s'/>" % c.callback
 htmlCode += "<table class='access'>"
 htmlCode += "<tr><td class='header'>Do you grant access %s to access your account in DIRAC?</td>" % c.consName
