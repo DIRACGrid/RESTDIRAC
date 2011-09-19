@@ -83,8 +83,8 @@ def oauthRawRequest():
 
 
 
-@bottle.route( "/oauth/echo" )
-@bottle.post( "/oauth/echo" )
+@bottle.route( "/echo" )
+@bottle.post( "/echo" )
 #@gOAManager.authorize
 def echo():
 

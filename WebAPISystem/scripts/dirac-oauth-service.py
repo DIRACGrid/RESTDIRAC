@@ -1,10 +1,12 @@
 import bottle, sys
 from WebAPIDIRAC.WebAPISystem.private.routes import OAuthRoutes
+from WebAPIDIRAC.WebAPISystem.private.BottleOAManager import OAuthPlugin
 import WebAPIDIRAC.ConfigurationSystem.Client.Helpers.WebAPI as WebAPICS
 from DIRAC.Core.Base import Script
 from DIRAC import gLogger
 
 def runServer():
+  bottle.install( OAuthPlugin() )
   bottle.run( host = 'localhost', port = 9354, reloader = True )#, server = "flup" )
 
 @bottle.route( "/" )

@@ -25,8 +25,28 @@ class BottleOAManager( OAManager ):
                                                     request.query_string )
 
   def notAuthorized( self ):
-    bottle.abort( 500 )
+    bottle.abort( 401 )
 
+class OAuthPlugin( object ):
 
+  def __init__( self ):
+    pass
+
+  def name( self ):
+    return "OAuthPlugin"
+
+  def api( self ):
+    return 2
+
+  def setup( self, app ):
+    pass
+
+  def close( self ):
+    pass
+
+  def apply( self, callback, route ):
+    if route.rule.find( "/oauth/" ) == 0:
+      return callback
+    return gOAManager.authorize( callback )
 
 gOAManager = BottleOAManager()

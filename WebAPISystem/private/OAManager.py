@@ -11,14 +11,36 @@ class OAData( threading.local ):
 
   def __init__( self ):
     self.__oaData = {}
+    self.__tokenData = {}
+    self.__cred = getCredentialsClient()
 
   def bind( self, oaData ):
     self.__oaData = oaData
+    if self.__tokenData:
+      self.__tokenData = {}
+    if 'access_token' in oaData:
+      result = self.__cred.getTokenData( oaData[ 'consumer_key' ], oaData[ 'access_token' ] )
+      if result[ 'OK' ]:
+        self.__tokenData = result[ 'Value' ]
 
   def __inOAData ( self, key ):
     if key in self.__oaData:
       return str( self.__oaData[ key ] )
     return False
+
+  def __inTokenData( self, key ):
+    if key in self.__tokenData:
+      return str( self.__tokenData[ key ] )
+    return False
+
+  @property
+  def userDN( self ):
+    return self.__inTokenData( 'userDN' )
+
+  @property
+  def userGroup( self ):
+    return self.__inTokenData( 'userGroup' )
+
 
   @property
   def consumerKey( self ):
@@ -152,9 +174,11 @@ class OAManager( object ):
 
   def authorize( self, funct ):
     oaRequest = self.parse()
-    result = self.checkRequest( oaRequest, checkToken = True )
+    result = self.authorizeFlow( oaRequest, checkToken = True )
     if not result[ 'OK' ]:
       return self.notAuthorized
+    gLogger.notice( "Delegated by %s@%s" % ( gOAData.userDN, gOAData.userGroup ) )
+    return funct
 
 
 gOAManager = OAManager()

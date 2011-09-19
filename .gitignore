@@ -24,4 +24,5 @@ pip-log.txt
 .pyproject
 .settings
 
-
+#Sphinx
+docs/_build/
