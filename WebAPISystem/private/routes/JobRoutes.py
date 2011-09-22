@@ -3,6 +3,7 @@ from DIRAC import S_OK, S_ERROR, gLogger
 
 from WebAPIDIRAC.WebAPISystem.private.BottleOAManager import gOAData
 from WebAPIDIRAC.WebAPISystem.private.Clients import getRPCClient
+from DIRAC.Core.Utilities.JDL import loadJDLAsCFG
 from DIRAC.Core.Utilities import List
 
 #GET    SELET
@@ -90,6 +91,30 @@ def __getJobs( selDict, startJob = 0, maxJobs = 500 ):
     retData[ 'jobs' ].append( job )
   return retData
 
+
+def __getJobDescription( jid ):
+  result = getRPCClient( "WorkloadManagement/JobMonitoring" ).getJobJDL( jid )
+  if not result[ 'OK' ]:
+    bottle.abort( 500, result[ 'Message' ] )
+  result = loadJDLAsCFG( result[ 'Value' ] )
+  if not result[ 'OK' ]:
+    bottle.abort( 500, result[ 'Message' ] )
+  cfg = result[ 'Value' ][0]
+  jobData = {}
+  stack = [ ( cfg, jobData ) ]
+  while stack:
+    cfg, level = stack.pop( 0 )
+    print cfg
+    for op in cfg.listOptions():
+      val = List.fromChar( cfg[ op ] )
+      if len( val ) == 1:
+        val = val[0]
+      level[ op ] = val
+    for sec in cfg.listSections():
+      level[ sec ] = {}
+      stack.append( ( cfg[ sec ], level[ sec ] ) )
+  return jobData
+
 @bottle.route( "/jobs", method = 'GET' )
 def getJobs():
   selDict = {}
@@ -123,11 +148,23 @@ def postJobs():
 
 @bottle.route( "/jobs/:jid", method = 'GET' )
 def getJob( jid ):
+  try:
+    jid = int( jid )
+  except ValueError:
+    bottle.abort( 415, "jid has to be an integer! " )
   retDict = __getJobs( { 'JobID' : jid } )
   print retDict
   if retDict[ 'entries' ] == 0:
     bottle.abort( 404, "Unknown jid" )
   return retDict[ 'jobs'][0]
+
+@bottle.route( "/jobs/:jid/description", method = 'GET' )
+def getJobDescription( jid ):
+  try:
+    jid = int( jid )
+  except ValueError:
+    bottle.abort( 415, "jid has to be an integer! " )
+  return __getJobDescription( jid )
 
 
 @bottle.route( "/jobs/:jid", method = 'PUT' )
@@ -136,6 +173,6 @@ def putJob( jid ):
   pass
 
 @bottle.route( "/jobs/:jid", method = 'DELETE' )
-def putJob( jid ):
-  #Delete a job
+def killJob( jid ):
+  #Kill a job
   pass
