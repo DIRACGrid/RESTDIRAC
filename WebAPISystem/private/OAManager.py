@@ -4,6 +4,7 @@ import oauth2
 import threading
 
 from DIRAC import gLogger, S_OK, S_ERROR, gConfig
+from WebAPIDIRAC.ConfigurationSystem.Client.Helpers import Registry
 from WebAPIDIRAC.WebAPISystem.Client.CredentialsWrapper import getCredentialsClient
 
 
@@ -36,6 +37,17 @@ class OAData( threading.local ):
   @property
   def userDN( self ):
     return self.__inTokenData( 'userDN' )
+
+  @property
+  def userName( self ):
+    DN = self.__inTokenData( 'userDN' )
+    if not DN:
+      return False
+    result = Registry.getUsernameForDN( DN )
+    if not result[ 'OK' ]:
+      return False
+    return result[ 'Value' ]
+
 
   @property
   def userGroup( self ):

@@ -3,6 +3,7 @@ import time
 import random
 import oauth2
 import urllib
+import cgi
 
 try:
   from hashlib import md5
@@ -22,8 +23,63 @@ random.seed()
 
 class WebapiController( BaseController ):
 
+  def __getMap( self ):
+    url = request.url
+    url = url[ url.find( "/", 8 ) : ]
+    scriptName = request.environ[ 'SCRIPT_NAME' ]
+    if scriptName:
+      if scriptName[0] != "/":
+        scriptName = "/%s" % scriptName
+      if url.find( scriptName ) == 0:
+        url = url[ len( scriptName ): ]
+    pI = url.find( '?' );
+    if pI > -1:
+      params = url[ pI + 1: ]
+      url = url[ :pI ]
+    else:
+      params = ""
+    pDict = dict( cgi.parse_qsl( params ) )
+    if not url:
+      url = "/"
+    return ( config[ 'routes.map' ].match( url ), pDict )
+
+  def __changeSetupAndRedirect( self, requestedValue ):
+    redDict = False
+    refDict, paramsDict = self.__getMap()
+    if refDict:
+      redDict = paramsDict
+      for key in ( 'controller', 'action' ):
+        if key in refDict:
+          redDict[ key ] = refDict[ key ]
+      if 'id' in refDict:
+        redDict[ 'id' ] = refDict[ 'id' ]
+      else:
+        redDict[ 'id' ] = None
+      if 'controller' in redDict and 'action' in redDict and \
+         redDict[ 'controller' ] == 'template' and \
+         redDict[ 'action' ] == 'view':
+        redDict = False
+    request.environ[ 'pylons.routes_dict' ][ 'dsetup' ] = requestedValue
+    if redDict:
+      return redirect_to( **redDict )
+    return defaultRedirect()
+
 
   def authorizeRequest( self ):
+    #Check the setup is allright
+    if 'setup' in request.params:
+      requestedSetup = request.params[ 'setup' ]
+      result = gConfig.getSections( "/DIRAC/Setups" )
+      if not result[ 'OK' ]:
+        c.error( "Oops: %s" % result[ 'Value' ] )
+        return render( "/error.mako" )
+      knownSetups = result[ 'Value' ]
+      if requestedSetup not in knownSetups:
+        c.error = "Unknown %s setup" % requestedSetup
+        return render( "/error.mako" )
+      if getSelectedSetup() != requestedSetup:
+        return self.__changeSetupAndRedirect( requestedSetup )
+
     params = {}
     for key in request.params:
       params[ key ] = request.params[ key ]

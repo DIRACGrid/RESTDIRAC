@@ -2,7 +2,7 @@ import bottle
 import oauth2
 import urlparse
 import urllib
-from DIRAC import S_OK, S_ERROR, gLogger
+from DIRAC import S_OK, S_ERROR, gLogger, gConfig
 
 from WebAPIDIRAC.WebAPISystem.private.BottleOAManager import gOAManager, gOAData
 import WebAPIDIRAC.ConfigurationSystem.Client.Helpers.WebAPI as WebAPICS
@@ -16,7 +16,7 @@ def oauthRequestToken():
 
   result = gOAManager.authorizeFlow()
   if not result[ 'OK' ]:
-    gLogger.info( "Not authorized request: %s" % result[ 'Message' ] )
+    gLogger.notice( "Not authorized request: %s" % result[ 'Message' ] )
     bottle.abort( 401, "Not authorized: %s" % result[ 'Message' ] )
 
   callback = gOAData.callback
@@ -42,7 +42,11 @@ def oauthAuthorizeToken():
     if not webURL:
       gLogger.fatal( "Missing WebURL location!" )
       bottle.abort( 500 )
-    webURL = "%s?oauth_token=%s" % ( webURL, urllib.quote_plus( gOAData.token ) )
+    setup = gConfig.getValue( "/DIRAC/Setup", "" )
+    if not setup:
+      gLogger.fatal( "No setup defined. THIS CANNOT HAPPEN!!" )
+      bottle.abort( 500 )
+    webURL = "%s?oauth_token=%s&setup=%s" % ( webURL, urllib.quote_plus( gOAData.token ), setup )
     if gOAData.callback:
       webURL = "%s&oauth_callback=%s" % ( webURL, urllib.quote_plus( gOAData.callback ) )
     gLogger.notice( "redirecting to %s" % webURL )
