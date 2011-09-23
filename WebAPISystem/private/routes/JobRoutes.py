@@ -1,4 +1,4 @@
-import bottle, simplejson
+import bottle
 from DIRAC import S_OK, S_ERROR, gLogger
 
 from WebAPIDIRAC.WebAPISystem.private.BottleOAManager import gOAData
@@ -104,7 +104,6 @@ def __getJobDescription( jid ):
   stack = [ ( cfg, jobData ) ]
   while stack:
     cfg, level = stack.pop( 0 )
-    print cfg
     for op in cfg.listOptions():
       val = List.fromChar( cfg[ op ] )
       if len( val ) == 1:
@@ -140,11 +139,6 @@ def getJobs():
 
   return __getJobs( selDict, startJob, maxJobs )
 
-@bottle.route( "/jobs", method = 'POST' )
-def postJobs():
-  #Submit a job
-  pass
-
 
 @bottle.route( "/jobs/:jid", method = 'GET' )
 def getJob( jid ):
@@ -153,7 +147,6 @@ def getJob( jid ):
   except ValueError:
     bottle.abort( 415, "jid has to be an integer! " )
   retDict = __getJobs( { 'JobID' : jid } )
-  print retDict
   if retDict[ 'entries' ] == 0:
     bottle.abort( 404, "Unknown jid" )
   return retDict[ 'jobs'][0]
@@ -166,6 +159,11 @@ def getJobDescription( jid ):
     bottle.abort( 415, "jid has to be an integer! " )
   return __getJobDescription( jid )
 
+
+@bottle.route( "/jobs", method = 'POST' )
+def postJobs():
+  #Submit a job
+  pass
 
 @bottle.route( "/jobs/:jid", method = 'PUT' )
 def putJob( jid ):

@@ -181,16 +181,12 @@ class OAManager( object ):
 
     return oaRequest
 
-  def notAuthorized( self ):
-    raise RuntimeError( "Not authorized" )
-
-  def authorize( self, funct ):
+  def authorize( self ):
     oaRequest = self.parse()
     result = self.authorizeFlow( oaRequest, checkToken = True )
-    if not result[ 'OK' ]:
-      return self.notAuthorized
-    gLogger.notice( "Delegated by %s@%s" % ( gOAData.userDN, gOAData.userGroup ) )
-    return funct
+    if result[ 'OK' ]:
+      gLogger.notice( "Delegated by %s@%s" % ( gOAData.userDN, gOAData.userGroup ) )
+    return result
 
 
 gOAManager = OAManager()

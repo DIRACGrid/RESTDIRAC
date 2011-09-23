@@ -18,6 +18,8 @@ class BottleOAManager( OAManager ):
     urlparts = request.urlparts
     url = urlparse.urlunsplit( ( urlparts[0], urlparts[1], urlparts[2], "", "" ) )
 
+
+
     return super( BottleOAManager, self ).parse( request.method,
                                                     url,
                                                     request.headers,
@@ -47,6 +49,10 @@ class OAuthPlugin( object ):
   def apply( self, callback, route ):
     if route.rule.find( "/oauth/" ) == 0:
       return callback
-    return gOAManager.authorize( callback )
+    result = gOAManager.authorize()
+    if result[ 'OK' ]:
+      return callback
+    gLogger.info( "Not authorized: %s" % result[ 'Message' ] )
+    raise bottle.abort( 401, result[ 'Message' ] )
 
 gOAManager = BottleOAManager()

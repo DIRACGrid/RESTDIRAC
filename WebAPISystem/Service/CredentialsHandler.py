@@ -7,7 +7,7 @@ from WebAPIDIRAC.WebAPISystem.DB.CredentialsDB import CredentialsDB
 class CredentialsHandler( RequestHandler ):
 
   @classmethod
-  def initialize( cls, serviceInfoDict ):
+  def initializeHandler( cls, serviceInfoDict ):
     cls.__credDB = CredentialsDB()
     return S_OK()
 
