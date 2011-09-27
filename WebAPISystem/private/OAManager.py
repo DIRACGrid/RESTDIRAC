@@ -4,7 +4,7 @@ import oauth2
 import threading
 
 from DIRAC import gLogger, S_OK, S_ERROR, gConfig
-from WebAPIDIRAC.ConfigurationSystem.Client.Helpers import Registry
+from DIRAC.ConfigurationSystem.Client.Helpers import Registry
 from WebAPIDIRAC.WebAPISystem.Client.CredentialsWrapper import getCredentialsClient
 
 

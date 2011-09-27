@@ -27,4 +27,4 @@ if __name__ == "__main__":
 
   loadRoutes()
   bottle.install( OAuthPlugin() )
-  bottle.run( host = 'localhost', port = 9354, reloader = True )#, server = "flup" )
+  bottle.run( host = '', port = 9354, reloader = False )#, server = "flup" )

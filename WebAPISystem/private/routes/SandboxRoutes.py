@@ -8,14 +8,15 @@ from WebAPIDIRAC.WebAPISystem.private.BottleOAManager import gOAData
 from WebAPIDIRAC.WebAPISystem.private.Clients import getRPCClient, getTransferClient
 from DIRAC.WorkloadManagementSystem.Client.SandboxStoreClient import SandboxStoreClient
 
-@bottle.route( "/sandbox/input", method = 'POST' )
-def sendISB():
-  reqFiles = bottle.request.files
-  gLogger.info( "Received %s files for sandboxing" % len( reqFiles ) )
+#GET    SELET
+#POST   INSERT
+#PUT    UPDATE
+#DELETE DELETE
 
+def uploadSandbox( fileList ):
   tmpDir = tempfile.mkdtemp( "IROK." )
   fileList = []
-  for fileName in reqFiles:
+  for fileName in fileList:
     fDir = os.path.dirname( fileName )
     if fDir:
       fDir = os.path.join( tmpDir, fDir )
@@ -40,9 +41,39 @@ def sendISB():
   result = sbClient.uploadFilesAsSandbox( fileList )
 
   shutil.rmtree( tmpDir )
+  return result
+
+
+@bottle.route( "/sandbox/input", method = 'POST' )
+def sendISB():
+  reqFiles = bottle.request.files
+  gLogger.info( "Received %s files for sandboxing" % len( reqFiles ) )
+  result = self.uploadSandbox( reqFiles )
 
   if not result[ 'OK' ]:
     gLogger.error( result[ 'Message' ] )
     bottle.abort( 500, result[ 'Message' ] )
 
   return { 'sandbox' : result[ 'Value' ] }
+
+@bottle.route( "/sandbox/:type/:id", method = 'GET' )
+def listSandboxes( type, id ):
+  type = type.lower()
+  if type not in ( 'job', 'pilot' ):
+    bottle.abort( 404 )
+  try:
+    id = int( id )
+  except ValueError:
+    bottle.abort( 400, "id has to be an integer" )
+  sbClient = SandboxStoreClient( useCertificates = True, delegatedDN = gOAData.userDN,
+                                 delegatedGroup = gOAData.userGroup )
+  if type == "job":
+    result = sbClient.getSandboxesForJob( id )
+  else:
+    result = sbClient.getSandboxesForPilot( id )
+
+  if not result[ 'OK' ]:
+    bottle.abort( 500, result[ 'Message' ] )
+  return result[ 'Value' ]
+
+

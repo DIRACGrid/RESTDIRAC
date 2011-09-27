@@ -18,13 +18,11 @@ class BottleOAManager( OAManager ):
     urlparts = request.urlparts
     url = urlparse.urlunsplit( ( urlparts[0], urlparts[1], urlparts[2], "", "" ) )
 
-
-
     return super( BottleOAManager, self ).parse( request.method,
-                                                    url,
-                                                    request.headers,
-                                                    request.params,
-                                                    request.query_string )
+                                                 url,
+                                                 request.headers,
+                                                 request.query,
+                                                 request.query_string )
 
   def notAuthorized( self ):
     bottle.abort( 401 )

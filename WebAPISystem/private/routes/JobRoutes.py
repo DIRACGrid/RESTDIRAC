@@ -2,9 +2,11 @@ import bottle
 from DIRAC import S_OK, S_ERROR, gLogger
 
 from WebAPIDIRAC.WebAPISystem.private.BottleOAManager import gOAData
-from WebAPIDIRAC.WebAPISystem.private.Clients import getRPCClient
-from DIRAC.Core.Utilities.JDL import loadJDLAsCFG
-from DIRAC.Core.Utilities import List
+from WebAPIDIRAC.WebAPISystem.private.Clients import getRPCClient, getTransferClient
+from WebAPIDIRAC.WebAPISystem.private.routes.SandboxRoutes import uploadSandbox
+from DIRAC.Core.Utilities.JDL import loadJDLAsCFG, dumpCFGAsJDL
+from DIRAC.Core.Utilities import List, CFG
+from DIRAC.WorkloadManagementSystem.Client.WMSClient import WMSClient
 
 #GET    SELET
 #POST   INSERT
@@ -114,6 +116,12 @@ def __getJobDescription( jid ):
       stack.append( ( cfg[ sec ], level[ sec ] ) )
   return jobData
 
+
+def getWMSClient():
+  return WMSClient( getRPCClient( "WorkloadManagement/JobManager" ),
+                    getRPCClient( "WorkloadManagement/SandboxStore" ),
+                    getTransferClient( "WorkloadManagement/SandboxStore" ) )
+
 @bottle.route( "/jobs", method = 'GET' )
 def getJobs():
   selDict = {}
@@ -160,10 +168,44 @@ def getJobDescription( jid ):
   return __getJobDescription( jid )
 
 
+def JSON2JDL( jobData ):
+  cfg = CFG.CFG().loadFromDicT( jobData )
+  jdl = dumpCFGAsJDL( cfg )
+  return jdl
+
+
+
 @bottle.route( "/jobs", method = 'POST' )
 def postJobs():
-  #Submit a job
-  pass
+  request = bottle.request
+  if len( request.files ):
+    result = uploadSandbox( request.files )
+    if not result[ 'OK' ]:
+      bottle.abort( 500, result[ 'Message' ] )
+    isb = result[ 'Value' ]
+  else:
+    isb = False
+  jobs = []
+  wms = getWMSClient()
+  for k in request.forms:
+    origData = bottle.json_lds( request.forms[ k ] )
+    jobData = {}
+    if isb:
+      if 'InputSandbox' not in jobData:
+        jobData[ 'InputSandbox' ] = []
+      jobData[ 'InputSandbox' ].append( isb )
+    cfg = CFG.CFG().loadFromDict( jobData )
+    jdl = dumpCFGAsJDL( cfg )
+    result = wms.submitJob( jdl )
+    if not result[ 'OK' ]:
+      bottle.abort( 500, result[ 'Message' ] )
+    jobs.append( result[ 'Value' ] )
+  return { 'sandbox' : isb, 'jobs' : jobs }
+
+
+
+
+
 
 @bottle.route( "/jobs/:jid", method = 'PUT' )
 def putJob( jid ):
