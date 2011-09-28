@@ -26,6 +26,9 @@ def getAuthorizeURL():
 def useLocalDB():
   return getOption( "LocalDB", False )
 
+def getWorkDir():
+  return getOption( "WorkDir", "/tmp/diracwebapi" )
+
 def isOK():
   for option in ( "WebURL", ):
     if not getOption( option ):

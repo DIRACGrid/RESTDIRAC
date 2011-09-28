@@ -27,3 +27,6 @@ def loadRoutes():
       routesLoaded -= lastRoutesLoaded
       DIRAC.gLogger.info( "Loaded %s routes for %s" % ( routesLoaded, pythonClass ) )
       lastRoutesLoaded += routesLoaded
+      if 'initialize' in dir( objModule ):
+        DIRAC.gLogger.notice( "Initializing %s" % pythonClass )
+        getattr( objModule, 'initialize' )()

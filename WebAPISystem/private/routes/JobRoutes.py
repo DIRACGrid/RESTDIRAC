@@ -203,10 +203,6 @@ def postJobs():
   return { 'sandbox' : isb, 'jobs' : jobs }
 
 
-
-
-
-
 @bottle.route( "/jobs/:jid", method = 'PUT' )
 def putJob( jid ):
   #Modify a job
@@ -214,5 +210,14 @@ def putJob( jid ):
 
 @bottle.route( "/jobs/:jid", method = 'DELETE' )
 def killJob( jid ):
-  #Kill a job
-  pass
+  wms = getWMSClient()
+  result = wms.killJob( jid )
+  if not result[ 'OK' ]:
+    if 'NonauthorizedJobIDs' in result:
+      bottle.abort( 401, "Not authorized" )
+    if 'InvalidJobIDs' in result:
+      bottle.abort( 400, "Invalid JID" )
+    if 'FailedJobIDs' in result:
+      bottle.abort( 500, "Could not delete JID" )
+
+  return { 'jid' : jid }
