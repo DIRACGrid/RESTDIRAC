@@ -20,9 +20,9 @@ def loadRoutes():
       except:
         DIRAC.gLogger.exception( "Could not load %s" % fileName )
       routesLoaded = 0
-      routes = bottle.app().router.routes
-      for route in routes:
-        for method in routes[ route ]:
+      rules = bottle.app().router.rules
+      for rule in rules:
+        for method in rules[ rule ]:
           routesLoaded += 1
       routesLoaded -= lastRoutesLoaded
       DIRAC.gLogger.info( "Loaded %s routes for %s" % ( routesLoaded, pythonClass ) )
