@@ -1,7 +1,7 @@
 ########################################################################
 # $HeadURL$
 ########################################################################
-""" ProxyRepository class is a front-end to the proxy repository Database
+""" 
 """
 
 __RCSID__ = "$Id$"
@@ -16,13 +16,12 @@ except:
 from DIRAC  import gConfig, gLogger, S_OK, S_ERROR
 from DIRAC.Core.Base.DB import DB
 
-class OATokensDB( DB ):
+class OATokenDB( DB ):
 
-  VALID_OAUTH_TOKEN_TYPES = ( "request", "access" )
   __tables = {}
 
   def __init__( self, maxQueueSize = 10 ):
-    DB.__init__( self, 'OATokensDB', 'RESTAPI/OATokensDB', maxQueueSize )
+    DB.__init__( self, 'OATokenDB', 'REST/OATokenDB', maxQueueSize )
     random.seed()
     retVal = self.__initializeDB()
     if not retVal[ 'OK' ]:
@@ -40,19 +39,19 @@ class OATokensDB( DB ):
     tablesToCreate = {}
 
 
-    if 'OA_Client' not in OATokensDB.__tables:
-      OATokensDB.__tables[ 'OA_Client' ] = { 'Fields' : { 'ClientID': 'CHAR(32) NOT NULL UNIQUE',
+    if 'OA_Client' not in OATokenDB.__tables:
+      OATokenDB.__tables[ 'OA_Client' ] = { 'Fields' : { 'ClientID': 'CHAR(32) NOT NULL UNIQUE',
                                                           'Secret': 'CHAR(40) NOT NULL UNIQUE',
                                                           'Name': 'VARCHAR(64) NOT NULL UNIQUE',
                                                           'URL': 'VARCHAR(128) NOT NULL',
-                                                          'Redirect': 'VARCHAR(128) NOT NULL'
+                                                          'Redirect': 'VARCHAR(128) NOT NULL',
                                                           'Icon': 'VARCHAR(128) NOT NULL'
                                                         },
                                              'PrimaryKey': 'ClientID' 
                                            }
 
-    if 'OA_Code' not in OATokensDB.__tables:
-      OATokensDB.__tables[ 'OA_Code' ] = { 'Fields' : { 'Code': 'CHAR(40) NOT NULL UNIQUE',
+    if 'OA_Code' not in OATokenDB.__tables:
+      OATokenDB.__tables[ 'OA_Code' ] = { 'Fields' : { 'Code': 'CHAR(40) NOT NULL UNIQUE',
                                                         'ClientID': 'CHAR(32) NOT NULL',
                                                         'User': 'VARCHAR(16) NOT NULL',
                                                         'Group': 'VARCHAR(16) NOT NULL',
@@ -62,12 +61,12 @@ class OATokensDB( DB ):
                                                         'RedirectURI': 'VARCHAR(128)',
                                                         'Expiration': 'DATETIME NOT NULL',
                                                         'Used': 'TINYINT(1) NOT NULL DEFAULT 0'
-                                                     }
+                                                     },
                                            'PrimaryKey' : 'Code'
                                         }
 
-    if 'OA_Token' not in OATokensDB.__tables:
-      OATokensDB.__tables[ 'OA_Token' ] = { 'Fields' : { 'Token' : 'CHAR(40) NOT NULL UNIQUE',
+    if 'OA_Token' not in OATokenDB.__tables:
+      OATokenDB.__tables[ 'OA_Token' ] = { 'Fields' : { 'Token' : 'CHAR(40) NOT NULL UNIQUE',
                                                          'Code' : 'CHAR(40)',
                                                          'ClientID' : 'CHAR(32)',
                                                          'User': 'VARCHAR(16) NOT NULL',
@@ -75,20 +74,20 @@ class OATokensDB( DB ):
                                                          'Scope': 'VARCHAR(128)',
                                                          'Expiration': 'DATETIME NOT NULL',
                                                          'Class' : 'ENUM( "Access", "Refresh" ) NOT NULL',
-                                                         'Type' : 'ENUM( "Bearer", "Mac" ) NOT NULL',
+                                                         'Type' : 'ENUM( "Bearer", "Mac" ) NOT NULL'
                                                        },
                                              'PrimaryKey' : 'Token'
                                           }
 
-    for key in OATokens.__tables:
+    for key in OATokenDB.__tables:
       if key not in tablesInDB:
-        tablesToCreate[ key ] = OATokens.__tables[ key ]
+        tablesToCreate[ key ] = OATokenDB.__tables[ key ]
 
 
     return self._createTables( tablesToCreate )
 
   def __extract( self, table, condDict = None, cleanExpired = True ):
-    tableData = OATokens.__tables[ table ]
+    tableData = OATokenDB.__tables[ table ]
     fields = tableData[ 'Fields' ].keys()
     if cleanExpired:
       timeStamp = "Expiration"
@@ -106,7 +105,7 @@ class OATokensDB( DB ):
       objData = {}
       for iP in range( len( fields ) ):
         objData[ fields[ iP ] ] = data[ iP ]
-      objs[ objData[ primaryKey ] = objData
+      objs[ objData[ primaryKey ] ] = objData
     return S_OK( objs )
 
 
@@ -128,19 +127,19 @@ class OATokensDB( DB ):
     consData = { 'ClientID': clientid,
                  'Secret' : secret,
                  'Name' : name,
-                 'URL', url,
+                 'URL': url,
                  'Redirect' : redirect,
                  'Icon' : icon }
     return S_OK( consData )
 
   def getClientDataByID( self, clientid ):
-    result = self.getClientsData( { 'ClientID', clientid } )
+    result = self.getClientsData( { 'ClientID': clientid } )
     if not result[ 'OK' ]:
       return result
     data = result[ 'Value' ]
     if len( data ) == 0:
       return S_ERROR( "Unknown client" )
-    return S_OK( data[ data.keys()[0] ] )
+    return S_OK( data[ data.keys()[0] ] )
 
   def getClientDataByName( self, name ):
     result = self.getClientsData( { 'Name': name } )
@@ -149,7 +148,7 @@ class OATokensDB( DB ):
     data = result[ 'Value' ]
     if len( data ) == 0:
       return S_ERROR( "Unknown client" )
-    return S_OK( data[ data.keys()[0] ] )
+    return S_OK( data[ data.keys()[0] ] )
 
   def getClientsData( self, condDict = None ):
     return self._extract( 'OA_Client', condDict )
@@ -160,10 +159,10 @@ class OATokensDB( DB ):
   def deleteClientByName( self, name ):
     self.__deleteClient( { 'Name' : name } )
   
-  def __deleteClient( self, condDict )
+  def __deleteClient( self, condDict ):
     totalDeleted = 0
     for table in ( "OA_Client", "OA_Code", "OA_Token" ):
-      result self.deleteEntries( table, condDict )
+      result = self.deleteEntries( table, condDict )
       if not result[ 'OK' ]:
         return result
       totalDeleted += result[ 'Value' ]
@@ -182,7 +181,7 @@ class OATokensDB( DB ):
     consData = result[ 'Value' ]
     if not redirect:
       if consData[ 'redirect' ]:
-        redirect = consData[ 'redirect' ]:
+        redirect = consData[ 'redirect' ]
       else:
         return S_ERROR( "Neither client nor request have a redirect url defined" )
     elif consData[ 'redirect' ]:
@@ -223,7 +222,7 @@ class OATokensDB( DB ):
     data = result[ 'Value' ] 
     if not data:
       return S_OK( {} )
-    return S_OK( data[ data.keys()[0] )
+    return S_OK( data[ data.keys()[0] ] )
 
   def deleteCode( self, code ):
     totalDeleted = 0
