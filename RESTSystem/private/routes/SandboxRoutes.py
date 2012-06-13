@@ -66,6 +66,10 @@ def uploadSandbox( fileList ):
                                  delegatedGroup = gOAData.userGroup )
   result = sbClient.uploadFilesAsSandbox( fileList )
 
+  if result[ 'OK' ]:
+    sburl = result[ 'Value' ]
+    result = S_OK( { 'sandbox' : sburl, 'urlsafe' : urllib.quote( sburl, safe = '~' ) } )
+
   shutil.rmtree( tmpDir )
   return result
 
@@ -74,13 +78,13 @@ def uploadSandbox( fileList ):
 def sendISB():
   reqFiles = bottle.request.files
   gLogger.info( "Received %s files for sandboxing" % len( reqFiles ) )
-  result = self.uploadSandbox( reqFiles )
+  result = uploadSandbox( reqFiles )
 
   if not result[ 'OK' ]:
     gLogger.error( result[ 'Message' ] )
     bottle.abort( 500, result[ 'Message' ] )
 
-  return { 'sandbox' : result[ 'Value' ] }
+  return result
 
 @bottle.route( "/sandbox/list/:type/:id", method = 'GET' )
 def listSandboxes( type, id ):
