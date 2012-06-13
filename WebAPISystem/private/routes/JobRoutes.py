@@ -1,7 +1,7 @@
 import bottle
 from DIRAC import S_OK, S_ERROR, gLogger
 
-from WebAPIDIRAC.WebAPISystem.private.BottleOAManager import gOAData
+from WebAPIDIRAC.WebAPISystem.private.BottleOAManager import gOAData, gOAManager
 from WebAPIDIRAC.WebAPISystem.private.Clients import getRPCClient, getTransferClient
 from WebAPIDIRAC.WebAPISystem.private.routes.SandboxRoutes import uploadSandbox
 from DIRAC.Core.Utilities.JDL import loadJDLAsCFG, dumpCFGAsJDL
@@ -62,7 +62,7 @@ def __findIndexes( paramNames ):
 
 
 def __getJobs( selDict, startJob = 0, maxJobs = 500 ):
-  result = getRPCClient( "WorkloadManagement/JobMonitoring" ).getJobPageSummaryWeb( selDict,
+  result = getRPCClient( "WorkloadManagement/JobMonitoring", group = gOAData.userGroup, userDN = gOAData.userDN ).getJobPageSummaryWeb( selDict,
                                                                                     [( 'JobID', 'DESC' )],
                                                                                     startJob, maxJobs, True )
   if not result[ 'OK' ]:
@@ -124,6 +124,9 @@ def getWMSClient():
 
 @bottle.route( "/jobs", method = 'GET' )
 def getJobs():
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
   selDict = {}
   startJob = 0
   maxJobs = 100
@@ -141,15 +144,18 @@ def getJobs():
       bottle.abort( 400, "startJob has to be a positive integer!" )
   if 'maxJobs' in bottle.request:
     try:
-      maxJobs = min( 500, int( bottle.request[ 'maxJobs' ] ) )
+      maxJobs = min( 1000, int( bottle.request[ 'maxJobs' ] ) )
     except:
-      bottle.abort( 400, "maxJobs has to be a positive integer no greater than 500!" )
+      bottle.abort( 400, "maxJobs has to be a positive integer no greater than 1000!" )
 
   return __getJobs( selDict, startJob, maxJobs )
 
 
 @bottle.route( "/jobs/:jid", method = 'GET' )
 def getJob( jid ):
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
   try:
     jid = int( jid )
   except ValueError:
@@ -161,6 +167,9 @@ def getJob( jid ):
 
 @bottle.route( "/jobs/:jid/description", method = 'GET' )
 def getJobDescription( jid ):
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
   try:
     jid = int( jid )
   except ValueError:
@@ -177,6 +186,9 @@ def JSON2JDL( jobData ):
 
 @bottle.route( "/jobs", method = 'POST' )
 def postJobs():
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
   request = bottle.request
   if len( request.files ):
     result = uploadSandbox( request.files )
@@ -189,7 +201,7 @@ def postJobs():
   wms = getWMSClient()
   for k in request.forms:
     origData = bottle.json_lds( request.forms[ k ] )
-    jobData = {}
+    jobData = origData
     if isb:
       if 'InputSandbox' not in jobData:
         jobData[ 'InputSandbox' ] = []
@@ -205,11 +217,17 @@ def postJobs():
 
 @bottle.route( "/jobs/:jid", method = 'PUT' )
 def putJob( jid ):
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
   #Modify a job
   pass
 
 @bottle.route( "/jobs/:jid", method = 'DELETE' )
 def killJob( jid ):
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
   wms = getWMSClient()
   result = wms.killJob( jid )
   if not result[ 'OK' ]:

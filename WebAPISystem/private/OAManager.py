@@ -22,6 +22,7 @@ class OAData( threading.local ):
     if 'access_token' in oaData:
       result = self.__cred.getTokenData( oaData[ 'consumer_key' ], oaData[ 'access_token' ] )
       if result[ 'OK' ]:
+        print result[ 'Value' ]
         self.__tokenData = result[ 'Value' ]
 
   def __inOAData ( self, key ):
