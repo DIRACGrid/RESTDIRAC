@@ -157,7 +157,7 @@ def getJobs():
       bottle.abort( 400, "startJob has to be a positive integer!" )
   if 'maxJobs' in bottle.request.params:
     try:
-      maxJobs = min( maxJobs, int( bottle.request.params[ 'maxJobs' ] ) )
+      maxJobs = min( 1000, int( bottle.request.params[ 'maxJobs' ] ) )
     except:
       bottle.abort( 400, "maxJobs has to be a positive integer no greater than 1000!" )
 
