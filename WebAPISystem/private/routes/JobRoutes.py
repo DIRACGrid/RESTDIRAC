@@ -166,6 +166,9 @@ def getJobs():
 
 @bottle.route( "/jobs/summary" , method = 'GET' )
 def getJobsSummary():
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
   selDict = {}
   # Hard code last day for the time being
   lastUpdate = Time.dateTime() - Time.day
