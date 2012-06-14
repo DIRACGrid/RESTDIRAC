@@ -71,8 +71,7 @@ def __getJobCounters( selDict ):
   resultDict = {}
   for statusDict, count in result['Value']:
     status = statusDict['Status']
-    if status in finalStates:
-      resultDict[status] = count
+    resultDict[status] = count
   return resultDict
 
 def __getJobs( selDict, startJob = 0, maxJobs = 500 ):
