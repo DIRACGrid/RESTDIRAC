@@ -6,6 +6,7 @@ from WebAPIDIRAC.WebAPISystem.private.Clients import getRPCClient, getTransferCl
 from WebAPIDIRAC.WebAPISystem.private.routes.SandboxRoutes import uploadSandbox
 from DIRAC.Core.Utilities.JDL import loadJDLAsCFG, dumpCFGAsJDL
 from DIRAC.Core.Utilities import List, CFG
+import DIRAC.Core.Utilities.Time as Time
 from DIRAC.WorkloadManagementSystem.Client.WMSClient import WMSClient
 
 #GET    SELET
@@ -46,6 +47,8 @@ timesConv = [ ( 'lastSOL', 'LastSignOfLife' ),
               ( 'heartBeat', 'HeartBeatTime' ),
               ( 'endExecution' , 'EndExecTime' ) ]
 
+finalStates = ['Done','Completed','Stalled','Failed','Killed']
+
 
 def __findIndexes( paramNames ):
   indexes = {}
@@ -60,6 +63,17 @@ def __findIndexes( paramNames ):
       indexes[ k ][ attrPair[0] ] = iP
   return indexes
 
+def __getJobCounters( selDict ):
+  cutDate = selDict.pop('cutDate','')
+  result = getRPCClient( "WorkloadManagement/JobMonitoring" ).getCounters( ['Status'], selDict, cutDate)
+  if not result[ 'OK' ]:
+    bottle.abort( 500, result[ 'Message' ] )
+  resultDict = {}
+  for statusDict, count in result['Value']:
+    status = statusDict['Status']
+    if status in finalStates:
+      resultDict[status] = count
+  return resultDict
 
 def __getJobs( selDict, startJob = 0, maxJobs = 500 ):
   result = getRPCClient( "WorkloadManagement/JobMonitoring" ).getJobPageSummaryWeb( selDict,
@@ -147,6 +161,13 @@ def getJobs():
 
   return __getJobs( selDict, startJob, maxJobs )
 
+@bottle.route( "/jobs/summary" , method = 'GET' )
+def getJobsSummary():
+  selDict = {}
+  # Hard code last day for the time being
+  lastUpdate = Time.dateTime() - Time.day
+  selDict['cutDate'] = lastUpdate
+  return __getJobCounters( selDict )
 
 @bottle.route( "/jobs/:jid", method = 'GET' )
 def getJob( jid ):
