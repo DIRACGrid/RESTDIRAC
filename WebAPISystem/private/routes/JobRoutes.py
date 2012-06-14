@@ -147,11 +147,9 @@ def getJobs():
     for attrPair in convList:
       jAtt = attrPair[0]
       if jAtt in bottle.request.params:
-        selDict[ attrPair[1] ] = List.fromChar( bottle.request[ attr[0] ] )
+        selDict[ attrPair[1] ] = List.fromChar( bottle.request.params[ attrPair[0] ] )
   if 'allOwners' not in bottle.request.params:
     selDict[ 'Owner' ] = gOAData.userName
-  if 'status' in bottle.request.params:
-    selDict[ 'Status' ] = bottle.request.params[ 'status' ].title()
   if 'startJob'  in bottle.request.params:
     try:
       startJob = max( 0, int( bottle.request.params[ 'startJob' ] ) )
