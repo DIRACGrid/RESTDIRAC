@@ -204,6 +204,10 @@ def getGroupedJobs( var ):
 
 @bottle.route( "/jobs/groupby/:groupVar" , method = 'GET' )
 def getGroupedJobs( groupVar ):
+  from itertools import chain
+  def flatten(dictionary):
+    return chain(*dictionary.values())
+
   result = gOAManager.authorize()
   if not result[ 'OK' ]:
     bottle.abort( 401, result[ 'Message' ] )
@@ -229,8 +233,10 @@ def getGroupedJobs( groupVar ):
       maxJobs = min( 1000, int( bottle.request.params[ 'maxJobs' ] ) )
     except:
       bottle.abort( 400, "maxJobs has to be a positive integer no greater than 1000!" )
-
-  return __getGroupedJobs( selDict , groupVar , maxJobs )
+  ret = __getGroupedJobs( selDict , groupVar , maxJobs )
+  if 'flatten' in bottle.request.params:
+    ret = flatten(ret)
+  return ret
 
 @bottle.route( "/jobs/summary" , method = 'GET' )
 def getJobsSummary():
