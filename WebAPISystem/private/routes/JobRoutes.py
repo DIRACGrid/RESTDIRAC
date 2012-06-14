@@ -74,6 +74,19 @@ def __getJobCounters( selDict ):
     resultDict[status] = count
   return resultDict
 
+def __getGroupedJobs( selDict, groupBy, maxJobsPerGroup = 100 ):
+  baseDict = dict(selDict)
+  groupValues = baseDict.pop( groupBy, None )
+  if not groupValues:
+    bottle.abort( 500, 'Cannot group by %s because no cut has been specified' % groupBy )
+  retDict = {}
+  for groupValue in groupValues:
+    sDict = dict(baseDict)
+    sDict[ groupBy ] = groupValues
+    result = __getJobs( sDict, 0, maxJobs = maxJobsPerGroup )
+    retDict[ groupValues ] = result
+  return retDict
+
 def __getJobs( selDict, startJob = 0, maxJobs = 500 ):
   result = getRPCClient( "WorkloadManagement/JobMonitoring", group = gOAData.userGroup, userDN = gOAData.userDN ).getJobPageSummaryWeb( selDict,
                                                                                     [( 'JobID', 'DESC' )],
@@ -161,7 +174,33 @@ def getJobs():
     except:
       bottle.abort( 400, "maxJobs has to be a positive integer no greater than 1000!" )
 
-  return __getJobs( selDict, startJob, maxJobs )
+@bottle.route( "/jobs/groupby/:var" , method = 'GET' )
+def getGroupedJobs( var ):
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
+  selDict = {}
+  startJob = 0
+  maxJobs = 100
+  for convList in ( attrConv, flagConv ):
+    for attrPair in convList:
+      jAtt = attrPair[0]
+      if jAtt in bottle.request.params:
+        selDict[ attrPair[1] ] = List.fromChar( bottle.request.params[ attrPair[0] ] )
+  if 'allOwners' not in bottle.request.params:
+    selDict[ 'Owner' ] = gOAData.userName
+  if 'startJob'  in bottle.request.params:
+    try:
+      startJob = max( 0, int( bottle.request.params[ 'startJob' ] ) )
+    except:
+      bottle.abort( 400, "startJob has to be a positive integer!" )
+  if 'maxJobs' in bottle.request.params:
+    try:
+      maxJobs = min( 1000, int( bottle.request.params[ 'maxJobs' ] ) )
+    except:
+      bottle.abort( 400, "maxJobs has to be a positive integer no greater than 1000!" )
+
+  return __getGroupedJobs( selDict , var , maxJobs )
 
 @bottle.route( "/jobs/summary" , method = 'GET' )
 def getJobsSummary():
