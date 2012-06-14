@@ -169,6 +169,8 @@ def getJobsSummary():
   if not result[ 'OK' ]:
     bottle.abort( 401, result[ 'Message' ] )
   selDict = {}
+  if 'allOwners' not in bottle.request.params:
+    selDict[ 'Owner' ] = gOAData.userName
   # Hard code last day for the time being
   lastUpdate = Time.dateTime() - Time.day
   selDict['cutDate'] = lastUpdate
