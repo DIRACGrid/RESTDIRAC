@@ -74,6 +74,20 @@ def __getJobCounters( selDict ):
     resultDict[status] = count
   return resultDict
 
+def __getGroupedJobs( selDict, groupBy, maxJobsPerGroup = 100 ):
+  baseDict = dict(selDict)
+  groupValues = baseDict.pop( groupBy, None )
+  if not groupValues:
+    bottle.abort( 500, 'Cannot group by %s because no cut has been specified' % groupBy )
+  retDict = {}
+  for groupValue in groupValues:
+    sDict = dict(baseDict)
+    print sDict
+    sDict[ groupBy ] = groupValues
+    result = __getJobs( sDict, 0, maxJobs = maxJobsPerGroup )
+    retDict[ groupValue ] = result
+  return retDict
+
 def __getJobs( selDict, startJob = 0, maxJobs = 500 ):
   result = getRPCClient( "WorkloadManagement/JobMonitoring", group = gOAData.userGroup, userDN = gOAData.userDN ).getJobPageSummaryWeb( selDict,
                                                                                     [( 'JobID', 'DESC' )],
@@ -163,15 +177,47 @@ def getJobs():
 
   return __getJobs( selDict, startJob, maxJobs )
 
+@bottle.route( "/jobs/groupby/:groupVar" , method = 'GET' )
+def getGroupedJobs( groupVar ):
+  result = gOAManager.authorize()
+  if not result[ 'OK' ]:
+    bottle.abort( 401, result[ 'Message' ] )
+  selDict = {}
+  startJob = 0
+  maxJobs = 100
+  for convList in ( attrConv, flagConv ):
+    for attrPair in convList:
+      jAtt = attrPair[0]
+      if jAtt in bottle.request.params:
+        selDict[ attrPair[1] ] = List.fromChar( bottle.request.params[ attrPair[0] ] )
+      if groupVar == attrPair[0]:
+        groupVar = attrPair[1]
+  if 'allOwners' not in bottle.request.params:
+    selDict[ 'Owner' ] = gOAData.userName
+  if 'startJob'  in bottle.request.params:
+    try:
+      startJob = max( 0, int( bottle.request.params[ 'startJob' ] ) )
+    except:
+      bottle.abort( 400, "startJob has to be a positive integer!" )
+  if 'maxJobs' in bottle.request.params:
+    try:
+      maxJobs = min( 1000, int( bottle.request.params[ 'maxJobs' ] ) )
+    except:
+      bottle.abort( 400, "maxJobs has to be a positive integer no greater than 1000!" )
+
+  return __getGroupedJobs( selDict , groupVar , maxJobs )
+
 @bottle.route( "/jobs/summary" , method = 'GET' )
 def getJobsSummary():
   result = gOAManager.authorize()
   if not result[ 'OK' ]:
     bottle.abort( 401, result[ 'Message' ] )
   selDict = {}
+  if 'allOwners' not in bottle.request.params:
+    selDict[ 'Owner' ] = gOAData.userName
   # Hard code last day for the time being
-  lastUpdate = Time.dateTime() - Time.day
-  selDict['cutDate'] = lastUpdate
+  #lastUpdate = Time.dateTime() - Time.day
+  #selDict['cutDate'] = lastUpdate
   return __getJobCounters( selDict )
 
 @bottle.route( "/jobs/:jid", method = 'GET' )
