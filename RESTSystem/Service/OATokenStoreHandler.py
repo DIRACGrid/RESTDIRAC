@@ -10,7 +10,10 @@ class OATokenStoreHandler( RequestHandler ):
 
   @classmethod
   def initializeHandler( cls, serviceInfoDict ):
-    cls.tokenDB = OATokenDB()
+    try:
+      cls.tokenDB = OATokenDB()
+    except RuntimeError, excp:
+      return S_ERROR( "Could not connect to DB: %s" % excp )
     result = cls.tokenDB._getConnection()
     if not result[ 'OK' ]:
       cls.log.warn( "Could not connect to OAtokenDB (%s). Resorting to RPC" % result[ 'Message' ] )
@@ -18,7 +21,7 @@ class OATokenStoreHandler( RequestHandler ):
     #Try to do magic
     myStuff = dir( cls )
     for method in dir( OAToken ):
-      if method.find( "set" ) != 0 and method.find( "get" ) != 0 and method.find( "execute" ) != 0:
+      if method.find( "get" ) != 0 and method.find( "generate" ) != 0:
         continue
       if "export_%s" % method in myStuff:
         cls.log.info( "Wrapping method %s. It's already defined in the Handler" % method )
@@ -28,8 +31,8 @@ class OATokenStoreHandler( RequestHandler ):
 #        setattr( cls, "export_%s" % method, cls.__unwrapAndCall )
       else:
         cls.log.info( "Mimicking method %s" % method )
-        setattr( cls, "auth_%s" % method, [ 'all' ] )
-        setattr( cls, "types_%s" % method, [ ( types.IntType, types.LongType ), types.TupleType ] )
+        setattr( cls, "auth_%s" % method, [ 'authenticated' ] )
+        setattr( cls, "types_%s" % method, [ types.TupleType ] )
         setattr( cls, "export_%s" % method, cls.__mimeticFunction )
     return S_OK()
 

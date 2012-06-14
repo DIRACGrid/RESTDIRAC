@@ -29,25 +29,25 @@ class OAToken( object ):
 
     def __call__( self, *args, **kwargs ):
       funcSelf = self.__functor.__self__
-      if not funcSelf.localAccess:
-        rpc = funcSelf._getTokenStoreClient()
-        if kwargs:
-          fArgs = ( args, kwargs )
-        else:
-          fArgs = ( args, )
-        fName = self.__functor.__name_
-        if fName.find( 'get' ) != 0:
-          return getattr( rpc, fName )( fArgs )
-        #Cache code
-        cKey = "%s( %s )" % ( fName, fArgs )
-        data = OAToken.__cache.get( cKey )
-        if data:
-          return S_OK( data )
-        result = getattr( rpc, fName )( fArgs )
-        if result[ 'OK' ]:
-          OAToken.__cache.add( cKey, 300, result[ 'Value' ] )
-        return result
-      return self.__functor( *args, **kwargs )
+      if funcSelf.localAccess:
+        return self.__functor( *args, **kwargs )
+      rpc = funcSelf._getTokenStoreClient()
+      if kwargs:
+        fArgs = ( args, kwargs )
+      else:
+        fArgs = ( args, )
+      fName = self.__functor.__name__
+      if fName.find( 'get' ) != 0:
+        return getattr( rpc, fName )( fArgs )
+      #Cache code
+      cKey = "%s( %s )" % ( fName, fArgs )
+      data = OAToken.__cache.get( cKey )
+      if data:
+        return S_OK( data )
+      result = getattr( rpc, fName )( fArgs )
+      if result[ 'OK' ]:
+        OAToken.__cache.add( cKey, 300, result[ 'Value' ] )
+      return result
 
   def __init__( self, forceLocal = False, getRPCFunctor = False ):
     self.__forceLocal = forceLocal
@@ -58,7 +58,7 @@ class OAToken( object ):
     #Init DB if there
     if not OAToken.__db.checked:
       OAToken.__db.checked = True
-      for varName, dbName in ( ( 'token', 'OATokensDB' ), ):
+      for varName, dbName in ( ( 'token', 'OATokenDB' ), ):
         try:
           dbImp = "RESTDIRAC.RESTSystem.DB.%s" % dbName
           dbMod = __import__( dbImp, fromlist = [ dbImp ] )
@@ -73,9 +73,13 @@ class OAToken( object ):
           else:
             result[ 'Value' ].close()
         except RuntimeError:
+          if self.__forceLocal:
+            raise
           OAToken.__db.reset()
           break
         except ImportError:
+          if self.__forceLocal:
+            raise
           OAToken.__db.reset()
           break
 
@@ -83,7 +87,7 @@ class OAToken( object ):
   def localAccess( self ):
     if OAToken._sDisableLocal:
       return False
-    if OAToken.__db.job or self.__forceLocal:
+    if OAToken.__db.token or self.__forceLocal:
       return True
     return False
 
@@ -91,7 +95,7 @@ class OAToken( object ):
     return OAToken.__db.token
 
   def _getTokenStoreClient( self ):
-    return self.__getRPCFunctor( "WorkloadManagement/OATokenStore" )
+    return self.__getRPCFunctor( "REST/OATokenStore" )
 
 
   #Client creation
@@ -101,4 +105,41 @@ class OAToken( object ):
 
   @RemoteMethod
   def getClientDataByID( self, clientid ):
-    return self.__getDB().getClientData
+    return self.__getDB().getClientDataByID( clientid )
+  
+  @RemoteMethod
+  def getClientDataByName( self, name ):
+    return self.__getDB().getClientDataByName( name )
+
+  @RemoteMethod
+  def getClientsData( self, condDict = None ):
+    return self.__getDB().getClientsData( condDict )
+
+  @RemoteMethod
+  def deleteClientByID( self, cid ):
+    return self.__getDB().deleteClientByID( cid )
+
+  @RemoteMethod
+  def deleteClientByName( self, name ):
+    return self.__getDB().deleteClientByName( name )
+
+
+  #Codes
+  @RemoteMethod
+  def generateCode( self, cid, type, user, group, redirect = "", scope = "", state = "" ):
+    return self.__getDB().generateCode( cid, type, user, group, redirect, scope, state )
+
+  @RemoteMethod
+  def getCodeData( self, code ):
+    return self.__getDB().getCodeData( code )
+
+  @RemoteMethod
+  def deleteCode( self, code ):
+    return self.__getDB().deleteCode( code )
+
+
+  #Tokens
+  @RemoteMethod
+  def generateTokenFromCode( self, cid, code ):
+    return self.__getDB().generateTokenFromCode( cid, code )
+
