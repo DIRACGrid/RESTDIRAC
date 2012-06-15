@@ -240,7 +240,7 @@ class OATokenDB( DB ):
   #
   #############################
 
-  def generateTokenFromCode( self, cid, code ):
+  def generateTokenFromCode( self, cid, code, secret = False ):
     result = self.__extract( 'OA_Code', { 'ClientID': clientid, 'Code': code } )
     if not result[ 'OK' ]:
       return result

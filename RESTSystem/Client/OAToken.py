@@ -140,6 +140,9 @@ class OAToken( object ):
 
   #Tokens
   @RemoteMethod
-  def generateTokenFromCode( self, cid, code ):
-    return self.__getDB().generateTokenFromCode( cid, code )
+  def generateTokenFromCode( self, cid, code, secret = False ):
+    return self.__getDB().generateTokenFromCode( cid, code, secret = False )
 
+  @RemoteMethod
+  def generateRawToken( self, user, group, scope = "", secret = False ):
+    return self.__getDB().generateRawToken( user, group, scope, secret )
