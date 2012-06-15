@@ -45,7 +45,6 @@ class OAuthPlugin( object ):
     pass
 
   def apply( self, callback, route ):
-    print "APPLY!"
     if route.rule.find( "/oauth/" ) == 0:
       return callback
     result = gOAManager.authorize()
