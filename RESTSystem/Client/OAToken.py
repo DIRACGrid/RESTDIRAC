@@ -1,7 +1,64 @@
 import types
+import functools
 from DIRAC import S_OK, S_ERROR, gLogger
 from DIRAC.Core.Utilities import Time, DictCache
+from DIRAC.Core.Utilities.Backports import getcallargs
 from DIRAC.Core.DISET.RPCClient import RPCClient
+
+__remoteMethods__ = []
+
+
+def RemoteMethod( method ):
+
+  __remoteMethods__.append( method )
+
+  @functools.wraps( method )
+  def wrapper( self, *args, **kwargs ):
+    if self.localAccess:
+      return method( self, *args, **kwargs )
+    rpc = self._getTokenStoreClient()
+    args = ( self, ) + args
+    fArgs = getcallargs( method, *args, **kwargs )
+    fName = method.__name__
+    return getattr( rpc, fName )( fArgs )
+
+  wrapper.__sneakybastard__ = method
+  return wrapper
+
+class Cache( object ):
+
+  __caches = {}
+
+  def __init__( self, cName, atName = False, cacheTime = 300 ):
+    if cName not in self.__caches:
+      self.__caches[ cName ] = DictCache()
+    self.__cache = self.__caches[ cName ]
+    self.__atName = atName
+    self.__cacheTime = cacheTime
+
+  def __call__( self, method ):
+
+    def wrapped( rSelf, *args, **kwargs ):
+      try:
+        rMethod = method.__sneakybastard__
+      except AttributeError:
+        rMethod = method
+        pass
+      fArgs = getcallargs( rMethod, rSelf, *args, **kwargs )
+      if self.__atName:
+        cKey = fArgs[ self.__atName ]
+      else:
+        cKey = tuple( str( fArgs[k] ) for k in sorted( fArgs ) if k != 'self' )
+      value = self.__cache.get( cKey )
+      if value:
+        return value
+      value = rMethod( rSelf, *args, **kwargs )
+      self.__cache.add( cKey, self.__cacheTime, value )
+      return value
+
+    return wrapped
+
+
 
 class OAToken( object ):
 
@@ -19,35 +76,6 @@ class OAToken( object ):
 
   _sDisableLocal = False
 
-  class RemoteMethod( object ):
-
-    def __init__( self, functor ):
-      self.__functor = functor
-
-    def __get__( self, obj, type = None ):
-      return self.__class__( self.__functor.__get__( obj, type ) )
-
-    def __call__( self, *args, **kwargs ):
-      funcSelf = self.__functor.__self__
-      if funcSelf.localAccess:
-        return self.__functor( *args, **kwargs )
-      rpc = funcSelf._getTokenStoreClient()
-      if kwargs:
-        fArgs = ( args, kwargs )
-      else:
-        fArgs = ( args, )
-      fName = self.__functor.__name__
-      if fName.find( 'get' ) != 0:
-        return getattr( rpc, fName )( fArgs )
-      #Cache code
-      cKey = "%s( %s )" % ( fName, fArgs )
-      data = OAToken.__cache.get( cKey )
-      if data:
-        return S_OK( data )
-      result = getattr( rpc, fName )( fArgs )
-      if result[ 'OK' ]:
-        OAToken.__cache.add( cKey, 300, result[ 'Value' ] )
-      return result
 
   def __init__( self, forceLocal = False, getRPCFunctor = False ):
     self.__forceLocal = forceLocal
@@ -72,12 +100,7 @@ class OAToken( object ):
             break
           else:
             result[ 'Value' ].close()
-        except RuntimeError:
-          if self.__forceLocal:
-            raise
-          OAToken.__db.reset()
-          break
-        except ImportError:
+        except ( ImportError, RuntimeError ):
           if self.__forceLocal:
             raise
           OAToken.__db.reset()
@@ -99,14 +122,17 @@ class OAToken( object ):
 
 
   #Client creation
+  @Cache( 'client', 'name' )
   @RemoteMethod
   def generateClientPair( self, name, url, redirect, icon ):
     return self.__getDB().generateClientPair( name, url, redirect, icon )
 
+  @Cache( 'client' )
   @RemoteMethod
-  def getClientDataByID( self, clientid ):
-    return self.__getDB().getClientDataByID( clientid )
-  
+  def getClientDataByID( self, cid ):
+    return self.__getDB().getClientDataByID( cid )
+
+  @Cache( 'client' )
   @RemoteMethod
   def getClientDataByName( self, name ):
     return self.__getDB().getClientDataByName( name )
@@ -126,8 +152,8 @@ class OAToken( object ):
 
   #Codes
   @RemoteMethod
-  def generateCode( self, cid, type, user, group, redirect = "", scope = "", state = "" ):
-    return self.__getDB().generateCode( cid, type, user, group, redirect, scope, state )
+  def generateCode( self, cid, user, group, redirect = "", scope = "", state = "" ):
+    return self.__getDB().generateCode( cid, user, group, redirect, scope, state )
 
   @RemoteMethod
   def getCodeData( self, code ):
@@ -144,5 +170,22 @@ class OAToken( object ):
     return self.__getDB().generateTokenFromCode( cid, code, secret = False )
 
   @RemoteMethod
-  def generateRawToken( self, user, group, scope = "", secret = False ):
-    return self.__getDB().generateRawToken( user, group, scope, secret )
+  def generateToken( self, user, group, scope = "", secret = False ):
+    return self.__getDB().generateToken( user, group, scope, secret )
+
+  @Cache( 'token' )
+  @RemoteMethod
+  def getTokenData( self, token ):
+    return self.__getDB().getTokenData( token )
+
+  @RemoteMethod
+  def getTokensData( self, condDict ):
+    return self.__getDB().getTokensData( condDict )
+
+  @RemoteMethod
+  def revokeToken( self, token ):
+    return self.__getDB().revokeToken( token )
+
+  @RemoteMethod
+  def revokeTokens( self, condDict ):
+    return self.__getDB().revokeTokens( condDict )
