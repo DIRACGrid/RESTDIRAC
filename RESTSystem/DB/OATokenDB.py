@@ -54,9 +54,8 @@ class OATokenDB( DB ):
                                                        'ClientID': 'CHAR(28) NOT NULL',
                                                        'UserDN': 'VARCHAR(128) DEFAULT NULL',
                                                        'UserGroup': 'VARCHAR(16) DEFAULT NULL',
+                                                       'LifeTime' : 'INT UNSIGNED NOT NULL',
                                                        'Scope': 'VARCHAR(128) DEFAULT NULL',
-                                                       'State': 'VARCHAR(32) DEFAULT NULL',
-                                                       'Redirect': 'VARCHAR(128) DEFAULT NULL',
                                                        'Expiration': 'DATETIME NOT NULL',
                                                        'Used': 'TINYINT(1) NOT NULL DEFAULT 0'
                                                     },
@@ -184,30 +183,19 @@ class OATokenDB( DB ):
   #
   #############################
 
-  def generateCode( self, cid, redirect = "", scope = "", state = "" ):
+  def generateCode( self, cid, userDN, userGroup, lifeTime, scope = "" ):
     result = self.getClientDataByID( cid )
     if not result[ 'OK' ]:
       return result
     consData = result[ 'Value' ]
-    if not redirect:
-      if 'Redirect' in consData:
-        redirect = consData[ 'Redirect' ]
-      else:
-        return S_ERROR( "Neither client nor request have a redirect url defined" )
-    elif consData[ 'redirect' ]:
-      oC = consData[ 'redirect' ]
-      if oC.find( redirect ) > 0:
-        redirect = oC
-      else:
-        return S_ERROR( "Invalid redirect url" )
 
     inData = { 'ClientID' : cid,
                'Expiration' : "TIMESTAMPADD( SECOND, %s, UTC_TIMESTAMP() )" % 600,
-               'Redirect' : redirect }
+               'UserDN' : userDN,
+               'UserGroup' : userGroup,
+               'LifeTime' : lifeTime }
     if scope:
       inData[ 'Scope' ] = scope
-    if state:
-      inData[ 'State' ] = state
     while True:
       inData[ 'Code' ] = self.__hash( "%s|%s" % ( cid, type ) )
       result = self.insertFields( "OA_Code", inDict = inData )
@@ -217,8 +205,7 @@ class OATokenDB( DB ):
         return result
       break
 
-    codeData = { 'Code' : inData[ 'Code' ], 'Redirect' : redirect }
-    return S_OK( codeData )
+    return S_OK( inData[ 'Code' ] )
 
 
   def getCodeData( self, code ):
@@ -260,10 +247,10 @@ class OATokenDB( DB ):
 
     return self.generateToken( codeData[ 'UserDN' ], codeData[ 'UserGroup' ], scope = codeData[ 'Scope' ],
                                cid = codeData[ 'ClientID' ], secret = secret, renewable = renewable,
-                               code = codeData[ 'Code' ] )
+                               code = codeData[ 'Code' ], lifeTime = codeData[ 'LifeTime' ] )
 
   def generateToken( self, userDN, userGroup, scope = "", cid = False,
-                     secret = False, renewable = True, code = False ):
+                     secret = False, renewable = True, lifeTime = 86400, code = False ):
     tokenClass = [ 'Access' ]
     if renewable:
       tokenClass.append( 'Refresh' )
@@ -299,11 +286,11 @@ class OATokenDB( DB ):
         secret = self.__hash( str( userDN, userGroup, token ) )
         inData[ 'Secret' ] = secret
         tData[ 'Secret' ] = secret
-      lifetime = 86400 * 365
+      tLifeTime = lifeTime
       if tClass == 'Access':
-        lifetime = 86400
-      inData[ 'Expiration' ] = 'TIMESTAMPADD( SECOND, %s, UTC_TIMESTAMP() )' % lifetime
-      tData[ 'LifeTime' ] = lifetime
+        tLifeTime = 86400
+      inData[ 'Expiration' ] = 'TIMESTAMPADD( SECOND, %s, UTC_TIMESTAMP() )' % tLifeTime
+      tData[ 'LifeTime' ] = tLifeTime
       result = self.insertFields( 'OA_Token', inDict = inData )
       if not result[ 'OK' ]:
         return result

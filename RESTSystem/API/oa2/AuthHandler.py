@@ -3,6 +3,7 @@ from tornado import web, gen
 from RESTDIRAC.RESTSystem.API.RESTHandler import RESTHandler, WErr, WOK
 from RESTDIRAC.RESTSystem.Client.OAToken import OAToken
 from DIRAC.ConfigurationSystem.Client.Helpers import Registry
+from RESTDIRAC.ConfigurationSystem.Client.Helpers.RESTConf import getCodeAuthURL
 
 class AuthHandler( RESTHandler ):
 
@@ -21,41 +22,44 @@ class AuthHandler( RESTHandler ):
         return
       self.finish( result.data )
       return
+
     #Auth
+    args = self.request.arguments
     try:
-      respType = self.request.arguments[ 'response_type' ][0]
+      respType = args[ 'response_type' ][0]
     except KeyError:
       #Bad request
       self.send_error( 400 )
       return
     #Start of Code request
     if respType == "code":
-      result = yield self.threadTask( self.__codeRequest )
+      try:
+        cid = args[ 'client_id' ]
+      except KeyError:
+        self.send_error( 400 )
+        return
+      self.redirect( "%s?%s" % ( getCodeAuthURL(), self.request.query ) )
     elif respType == "client_credentials":
       result = yield( self.threadTask( self.__clientCredentialsRequest ) )
+      if not result.ok:
+        self.log.error( result.msg )
+        self.send_error( result.code )
+        return
+      self.finish( result.data )
     elif respType in ( "token", "password" ):
       #Not implemented
       self.send_error( 501 )
-      return
     else:
       #ERROR!
       self.send_error( 400 )
-      return
 
-    if not result.ok:
-      self.log.error( result.msg )
-      self.send_error( result.code )
-      return
-    self.finish( result.data )
-    return
 
 
   def __codeRequest( self ):
-    args = self.request.arguments
     try:
       cid = args[ 'client_id' ]
     except KeyError:
-      return WErr( 400, "Missing client id" )
+      return WErr( 400, "Missing client_id"  )
     result = self.__oaToken.getClientDataByID( cid )
     if not result[ 'OK' ]:
       return WErr( 401, "Could not retrieve client info: %s" % result[ 'Message' ] )

@@ -9,6 +9,7 @@ import ssl, sys
 if __name__ == "__main__":
   from DIRAC.Core.Utilities.ObjectLoader import ObjectLoader
   from RESTDIRAC.RESTSystem.API.RESTHandler import RESTHandler
+  from RESTDIRAC.ConfigurationSystem.Client.Helpers import RESTConf
   from DIRAC.Core.Security import Locations
 
 
@@ -29,6 +30,11 @@ if __name__ == "__main__":
     gLogger.initialize( serverName, "/" )
     gLogger.error( "There were errors when loading configuration", resultDict[ 'Message' ] )
     sys.exit( 1 )
+
+  result = RESTConf.isOK()
+  if not result[ 'OK' ]:
+    gLogger.fatal( result[ 'Message' ] )
+    sys.exit(1)
 
   ol = ObjectLoader()
   result = ol.getObjects( "RESTSystem.API", parentClass = RESTHandler, recurse = True )
