@@ -1,7 +1,7 @@
 ########################################################################
 # $HeadURL$
 ########################################################################
-""" 
+"""
 """
 
 __RCSID__ = "$Id$"
@@ -14,6 +14,7 @@ import hashlib
 import base64
 from DIRAC  import gConfig, gLogger, S_OK, S_ERROR
 from DIRAC.Core.Base.DB import DB
+from DIRAC.ConfigurationSystem.Client.Helpers import Registry
 
 class OATokenDB( DB ):
 
@@ -39,24 +40,23 @@ class OATokenDB( DB ):
 
 
     if 'OA_Client' not in OATokenDB.__tables:
-      OATokenDB.__tables[ 'OA_Client' ] = { 'Fields' : { 'ClientID': 'CHAR(28) NOT NULL UNIQUE',
-                                                         'Secret': 'CHAR(28) NOT NULL UNIQUE',
+      OATokenDB.__tables[ 'OA_Client' ] = { 'Fields' : { 'ClientID': 'CHAR(29) NOT NULL UNIQUE',
                                                          'Name': 'VARCHAR(64) NOT NULL UNIQUE',
                                                          'URL': 'VARCHAR(128) NOT NULL',
                                                          'Redirect': 'VARCHAR(128) NOT NULL',
                                                          'Icon': 'VARCHAR(128) NOT NULL'
                                                        },
-                                            'PrimaryKey': 'ClientID' 
+                                            'PrimaryKey': 'ClientID'
                                           }
 
     if 'OA_Code' not in OATokenDB.__tables:
-      OATokenDB.__tables[ 'OA_Code' ] = { 'Fields' : { 'Code': 'CHAR(28) NOT NULL UNIQUE',
+      OATokenDB.__tables[ 'OA_Code' ] = { 'Fields' : { 'Code': 'CHAR(29) NOT NULL UNIQUE',
                                                        'ClientID': 'CHAR(28) NOT NULL',
-                                                       'UserDN': 'VARCHAR(128) NOT NULL',
-                                                       'UserGroup': 'VARCHAR(16) NOT NULL',
-                                                       'Scope': 'VARCHAR(128)',
-                                                       'State': 'VARCHAR(32)',
-                                                       'Redirect': 'VARCHAR(128)',
+                                                       'UserDN': 'VARCHAR(128) DEFAULT NULL',
+                                                       'UserGroup': 'VARCHAR(16) DEFAULT NULL',
+                                                       'Scope': 'VARCHAR(128) DEFAULT NULL',
+                                                       'State': 'VARCHAR(32) DEFAULT NULL',
+                                                       'Redirect': 'VARCHAR(128) DEFAULT NULL',
                                                        'Expiration': 'DATETIME NOT NULL',
                                                        'Used': 'TINYINT(1) NOT NULL DEFAULT 0'
                                                     },
@@ -68,6 +68,7 @@ class OATokenDB( DB ):
                                                          'Code' : 'CHAR(28)',
                                                          'Secret' : 'CHAR(28)',
                                                          'ClientID' : 'CHAR(28)',
+                                                         'UserName': 'VARCHAR(16) NOT NULL',
                                                          'UserDN': 'VARCHAR(128) NOT NULL',
                                                          'UserGroup': 'VARCHAR(16) NOT NULL',
                                                          'Scope': 'VARCHAR(128)',
@@ -126,17 +127,15 @@ class OATokenDB( DB ):
   #
   #############################
 
-  def generateClientPair( self, name, url, redirect, icon ):
-    cid = self.__hash( "%s|%s|%s" % ( name, url, icon ) ) 
-    secret = self.__hash( "%s|%s|%s" % ( name, url, cid ) ) 
-    result = self.insertFields( 'OA_Client', ( 'ClientID', 'Secret', 'Name', 'URL', 'Redirect', 'Icon' ),
-                                             ( cid, secret, name, url, redirect, icon ) )
+  def registerClient( self, name, redirect, url, icon ):
+    cid = self.__hash( "%s|%s|%s" % ( name, url, icon ) )
+    result = self.insertFields( 'OA_Client', ( 'ClientID', 'Name', 'URL', 'Redirect', 'Icon' ),
+                                             ( cid, name, url, redirect, icon ) )
     if not result[ 'OK' ]:
       if result[ 'Message' ].find( "Duplicate entry" ):
         return S_ERROR( "A client with name %s already exists" % name )
       return result
     consData = { 'ClientID': cid,
-                 'Secret' : secret,
                  'Name' : name,
                  'URL': url,
                  'Redirect' : redirect,
@@ -166,10 +165,10 @@ class OATokenDB( DB ):
 
   def deleteClientByID( self, cid ):
     return self.__deleteClient( { 'ClientID' : cid } )
-  
+
   def deleteClientByName( self, name ):
     return self.__deleteClient( { 'Name' : name } )
-  
+
   def __deleteClient( self, condDict ):
     totalDeleted = 0
     for table in ( "OA_Client", "OA_Code", "OA_Token" ):
@@ -185,7 +184,7 @@ class OATokenDB( DB ):
   #
   #############################
 
-  def generateCode( self, cid, userDN, userGroup, redirect = "", scope = "", state = "" ):
+  def generateCode( self, cid, redirect = "", scope = "", state = "" ):
     result = self.getClientDataByID( cid )
     if not result[ 'OK' ]:
       return result
@@ -202,7 +201,7 @@ class OATokenDB( DB ):
       else:
         return S_ERROR( "Invalid redirect url" )
 
-    inData = { 'ClientID' : cid, 'UserDN' : userDN, 'UserGroup' : userGroup, 
+    inData = { 'ClientID' : cid,
                'Expiration' : "TIMESTAMPADD( SECOND, %s, UTC_TIMESTAMP() )" % 600,
                'Redirect' : redirect }
     if scope:
@@ -217,7 +216,7 @@ class OATokenDB( DB ):
           continue
         return result
       break
-    
+
     codeData = { 'Code' : inData[ 'Code' ], 'Redirect' : redirect }
     return S_OK( codeData )
 
@@ -251,7 +250,7 @@ class OATokenDB( DB ):
     if codeData[ 'Used' ]:
       self.deleteCode( code )
       return S_ERROR( "Code has already been used! Invalidating all related tokens" )
-    result = self.updateFields( 'OA_Code', [ 'Used' ], [ 1 ], { 'Code': code, 'ClientID': cid, 
+    result = self.updateFields( 'OA_Code', [ 'Used' ], [ 1 ], { 'Code': code, 'ClientID': cid,
                                                                 'Used' : 0} )
     if not result[ 'OK' ]:
       return result
@@ -259,49 +258,35 @@ class OATokenDB( DB ):
       self.deleteCode( code )
       return S_ERROR( "Code has already been used! Invalidating all related tokens" )
 
+    return self.generateToken( codeData[ 'UserDN' ], codeData[ 'UserGroup' ], scope = codeData[ 'Scope' ],
+                               cid = codeData[ 'ClientID' ], secret = secret, renewable = renewable,
+                               code = codeData[ 'Code' ] )
+
+  def generateToken( self, userDN, userGroup, scope = "", cid = False,
+                     secret = False, renewable = True, code = False ):
     tokenClass = [ 'Access' ]
     if renewable:
       tokenClass.append( 'Refresh' )
 
-    inData = {}
-    for k in ( 'Code', 'ClientID', 'UserDN', 'UserGroup', 'Scope' ):
-      inData[ k ] = codeData[ k ]
-
-    tokens = {}
-    for tClass in tokenClass:
-      token = self.__hash( str( ( cid, code, tClass ) ) )
-      tData = {}
-      for k, v in ( ( 'Token', token ), ( 'Class', tClass ) ):
-        tData[ k ] = v
-        inData[ k ] = v
-      if secret:
-        secret = self.__hash( str( codeData, token ) )
-        inData[ 'Secret' ] = secret
-        tData[ 'Secret' ] = secret
-      lifetime = 86400 * 365
-      if tClass == 'Access':
-        lifetime = 86400
-      inData[ 'Expiration' ] = 'TIMESTAMPADD( SECOND, %s, UTC_TIMESTAMP() )' % lifetime
-      tData[ 'LifeTime' ] = lifetime
-      result = self.insertFields( 'OA_Token', inDict = inData )
-      if not result[ 'OK' ]:
-        return result
-      tokens[ tClass ] = tData
-
-    return S_OK( tokens )
-
-  def generateToken( self, cid, userDN, userGroup, scope = "", secret = False, renewable = True ):
-    result = self.getClientDataByID( cid )
-    if not result[ 'OK' ]:
-      return result
-
-    tokenClass = [ 'Access' ]
-    if renewable:
-      tokenClass.append( 'Refresh' )
-
-    inData = { 'ClientID' : cid, 'UserDN' : userDN, 'UserGroup' : 'userGroup' }
+    inData = { 'UserDN' : userDN, 'UserGroup' : userGroup }
     if scope:
       inData[ 'Scope' ] = scope
+    if code:
+      inData[ 'Code' ] = code
+
+    result = Registry.getUsernameForDN( userDN )
+    if not result[ 'OK' ]:
+      return result
+    inData[ 'UserName' ] = result[ 'Value' ]
+
+    if cid:
+      #If code is given no need to check cid (already checked)
+      if not code:
+        result = self.getClientDataByID( cid )
+        if not result[ 'OK' ]:
+          return result
+
+      inData[ 'ClientID' ] = cid
 
     tokens = {}
     for tClass in tokenClass:

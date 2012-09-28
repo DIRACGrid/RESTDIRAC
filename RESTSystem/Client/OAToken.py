@@ -52,7 +52,7 @@ class Cache( object ):
       value = self.__cache.get( cKey )
       if value:
         return value
-      value = rMethod( rSelf, *args, **kwargs )
+      value = rMethod( **fArgs )
       self.__cache.add( cKey, self.__cacheTime, value )
       return value
 
@@ -105,7 +105,6 @@ class OAToken( object ):
             raise
           OAToken.__db.reset()
           break
-
   @property
   def localAccess( self ):
     if OAToken._sDisableLocal:
@@ -124,8 +123,8 @@ class OAToken( object ):
   #Client creation
   @Cache( 'client', 'name' )
   @RemoteMethod
-  def generateClientPair( self, name, url, redirect, icon ):
-    return self.__getDB().generateClientPair( name, url, redirect, icon )
+  def registerClient( self, name, redirect, url, icon ):
+    return self.__getDB().registerClient( name, redirect, url, icon )
 
   @Cache( 'client' )
   @RemoteMethod
@@ -152,8 +151,8 @@ class OAToken( object ):
 
   #Codes
   @RemoteMethod
-  def generateCode( self, cid, user, group, redirect = "", scope = "", state = "" ):
-    return self.__getDB().generateCode( cid, user, group, redirect, scope, state )
+  def generateCode( self, cid, redirect = "", scope = "", state = "" ):
+    return self.__getDB().generateCode( cid, redirect, scope, state )
 
   @RemoteMethod
   def getCodeData( self, code ):
@@ -170,8 +169,8 @@ class OAToken( object ):
     return self.__getDB().generateTokenFromCode( cid, code, secret = False )
 
   @RemoteMethod
-  def generateToken( self, user, group, scope = "", secret = False ):
-    return self.__getDB().generateToken( user, group, scope, secret )
+  def generateToken( self, user, group, scope = "", cid = False, secret = False, renewable = True ):
+    return self.__getDB().generateToken( user, group, scope, cid, secret, renewable )
 
   @Cache( 'token' )
   @RemoteMethod

@@ -3,7 +3,7 @@ from DIRAC.Core.Base import Script
 from DIRAC import gLogger
 
 from tornado import web, httpserver, ioloop
-import ssl
+import ssl, sys
 
 
 if __name__ == "__main__":
@@ -12,13 +12,23 @@ if __name__ == "__main__":
   from DIRAC.Core.Security import Locations
 
 
+  from DIRAC.ConfigurationSystem.Client.LocalConfiguration import LocalConfiguration
+  from DIRAC.FrameworkSystem.Client.Logger import gLogger
 
-  Script.localCfg.addDefaultEntry( '/DIRAC/Security/UseServerCertificate', 'true' )
-  Script.localCfg.addDefaultEntry( "LogLevel", "INFO" )
-  #Script.enableCS()
-  Script.disableCS()
-  Script.parseCommandLine()
+  localCfg = LocalConfiguration()
 
+  positionalArgs = localCfg.getPositionalArguments()
+
+  localCfg.setConfigurationForWeb( "REST" )
+  #localCfg.addMandatoryEntry( "HandlerPath" )
+  localCfg.addMandatoryEntry( "/DIRAC/Setup" )
+  localCfg.addDefaultEntry( "/DIRAC/Security/UseServerCertificate", "yes" )
+  localCfg.addDefaultEntry( "LogLevel", "INFO" )
+  resultDict = localCfg.loadUserData()
+  if not resultDict[ 'OK' ]:
+    gLogger.initialize( serverName, "/" )
+    gLogger.error( "There were errors when loading configuration", resultDict[ 'Message' ] )
+    sys.exit( 1 )
 
   ol = ObjectLoader()
   result = ol.getObjects( "RESTSystem.API", parentClass = RESTHandler, recurse = True )
