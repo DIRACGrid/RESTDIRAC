@@ -101,15 +101,13 @@ class Oauth2Controller( BaseController ):
     try:
       redirect = str( request.params[ 'redirect_uri' ] )
     except KeyError:
-      redirect = cData[ 'Redirect' ]
-      if not redirect:
-        c.error = "Missing redirect_uri"
-        return render( "/error.mako" )
+      redirect = ""
 
     c.cName = cData[ 'Name' ]
     c.cImg = cData[ 'Icon' ]
     c.cID = cid
-    c.redirect = base64.urlsafe_b64encode( redirect )
+    if c.redirect:
+      c.redirect = base64.urlsafe_b64encode( redirect )
     c.userDN = getUserDN()
     c.userGroup = getSelectedGroup()
 
@@ -130,10 +128,23 @@ class Oauth2Controller( BaseController ):
     try:
       cid = str( request.params[ 'cid' ] )
       lifeTime = int( request.params[ 'accessTime' ] ) * 3600
-      redirect = base64.urlsafe_b64decode( str( request.params[ 'redirect' ] ) )
+      qRedirect = str( request.params[ 'redirect' ] )
+      if qRedirect:
+        qRedirect = base64.urlsafe_b64decode( qRedirect )
     except Exception, excp:
-      c.error = "Missing or invalid in query!<br/>%s" % str( excp )
+      c.error = "Missing or invalid in query!"
       return render( "/error.mako" )
+
+    result = self.__oaToken.getClientDataByID( cid )
+    if not result[ 'OK' ]:
+      c.error = "OOps... Seems the client id didn't make it :P"
+      return render( "/error.mako" )
+    cData = result[ 'Value' ]
+
+    if qRedirect:
+      redirect = qRedirect
+    else:
+      redirect = cData[ 'Redirect' ]
 
     if 'grant' not in request.params or str( request.params[ 'grant' ] ) != "Grant":
       return redirect_to( redirect, error = "access_denied" )
@@ -141,6 +152,8 @@ class Oauth2Controller( BaseController ):
     kw = { 'cid' : cid, 'userDN' : uDN, 'userGroup' : uGroup, 'lifeTime' : lifeTime }
     if 'scope' in request.params:
       kw[ 'scope' ] = str( request.params[ 'scope' ] )
+    if qRedirect:
+      kw[ 'redirect' ] = qRedirect
 
     result = self.__oaToken.generateCode( **kw )
     if not result[ 'OK' ]:
@@ -150,5 +163,5 @@ class Oauth2Controller( BaseController ):
     res = { 'code' : result[ 'Value' ] }
     if 'state' in request.params:
       res[ 'state' ] = str( request.params[ 'state' ] )
-    redirect_to( redirect, res )
+    redirect_to( redirect, **res )
 

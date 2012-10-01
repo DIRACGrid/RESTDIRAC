@@ -11,6 +11,7 @@ import types
 import sys
 import random
 import hashlib
+import urlparse
 import base64
 from DIRAC  import gConfig, gLogger, S_OK, S_ERROR
 from DIRAC.Core.Base.DB import DB
@@ -42,6 +43,7 @@ class OATokenDB( DB ):
     if 'OA_Client' not in OATokenDB.__tables:
       OATokenDB.__tables[ 'OA_Client' ] = { 'Fields' : { 'ClientID': 'CHAR(29) NOT NULL UNIQUE',
                                                          'Name': 'VARCHAR(64) NOT NULL UNIQUE',
+                                                         'Secret' : 'CHAR(29) DEFAULT NULL',
                                                          'URL': 'VARCHAR(128) NOT NULL',
                                                          'Redirect': 'VARCHAR(128) NOT NULL',
                                                          'Icon': 'VARCHAR(128) NOT NULL'
@@ -56,6 +58,7 @@ class OATokenDB( DB ):
                                                        'UserGroup': 'VARCHAR(16) DEFAULT NULL',
                                                        'LifeTime' : 'INT UNSIGNED NOT NULL',
                                                        'Scope': 'VARCHAR(128) DEFAULT NULL',
+                                                       'Redirect' : 'VARCHAR(128) DEFAULT NULL',
                                                        'Expiration': 'DATETIME NOT NULL',
                                                        'Used': 'TINYINT(1) NOT NULL DEFAULT 0'
                                                     },
@@ -127,6 +130,15 @@ class OATokenDB( DB ):
   #############################
 
   def registerClient( self, name, redirect, url, icon ):
+    try:
+      for k, v in ( ( "redirect", redirect ), ( "Client URL", url ) ):
+        if v:
+          pr = urlparse.urlparse( v )
+          if not pr.scheme or not pr.netloc:
+            return S_ERROR( "%s is not valid" % k )
+    except Exception, e:
+      return S_ERROR( "Cannot parse URL or Redirect: %s" % e )
+
     cid = self.__hash( "%s|%s|%s" % ( name, url, icon ) )
     result = self.insertFields( 'OA_Client', ( 'ClientID', 'Name', 'URL', 'Redirect', 'Icon' ),
                                              ( cid, name, url, redirect, icon ) )
@@ -183,7 +195,14 @@ class OATokenDB( DB ):
   #
   #############################
 
-  def generateCode( self, cid, userDN, userGroup, lifeTime, scope = "" ):
+  def generateCode( self, cid, userDN, userGroup, lifeTime, scope = "", redirect = "" ):
+    try:
+      if redirect:
+        pr = urlparse.urlparse( redirect )
+        if not pr.scheme or not pr.netloc:
+          return S_ERROR( "Invalid redirect" )
+    except:
+      return S_ERROR( "Invalid Redirect" )
     result = self.getClientDataByID( cid )
     if not result[ 'OK' ]:
       return result
@@ -196,6 +215,8 @@ class OATokenDB( DB ):
                'LifeTime' : lifeTime }
     if scope:
       inData[ 'Scope' ] = scope
+    if redirect:
+      inData[ 'Redirect' ]
     while True:
       inData[ 'Code' ] = self.__hash( "%s|%s" % ( cid, type ) )
       result = self.insertFields( "OA_Code", inDict = inData )
@@ -227,13 +248,19 @@ class OATokenDB( DB ):
   #
   #############################
 
-  def generateTokenFromCode( self, cid, code, secret = False, renewable = True ):
+  def generateTokenFromCode( self, cid, code, redirect = False, secret = False, renewable = True ):
     result = self.__extract( 'OA_Code', { 'ClientID': cid, 'Code': code }, single = True )
     if not result[ 'OK' ]:
       return result
     codeData = result[ 'Value' ]
     if not codeData:
-      return S_ERROR( "Code-Client combination is unknown" )
+      result = S_ERROR( "Code-Client combination is unknown" )
+      result[ 'err' ] = "unknown"
+      return result
+    if codeData[ 'Redirect' ] and codeData[ 'Redirect' ] != redirect:
+      result = S_ERROR( "Mismatching redirect" )
+      result[ 'err' ] = "redirect"
+      return result
     if codeData[ 'Used' ]:
       self.deleteCode( code )
       return S_ERROR( "Code has already been used! Invalidating all related tokens" )

@@ -28,6 +28,7 @@ class RESTHandler( tornado.web.RequestHandler ):
 
   ROUTE = False
   __threadPool = getGlobalThreadPool()
+  __log = False
 
   @staticmethod
   def threadTask( method, *args, **kwargs ):
@@ -61,7 +62,8 @@ class RESTHandler( tornado.web.RequestHandler ):
 
   def __init__( self, *args, **kwargs ):
     super( RESTHandler, self ).__init__( *args, **kwargs )
-    self.__log = gLogger.getSubLogger( self.__class__.__name__ )
+    if not RESTHandler.__log:
+      RESTHandler.__log = gLogger.getSubLogger( self.__class__.__name__ )
     self.__credDict = False
 
   def getClientCredentials( self ):
@@ -84,10 +86,14 @@ class RESTHandler( tornado.web.RequestHandler ):
     self.__credDict = result[ 'Value' ]
     return self.__credDict
 
-
   @property
   def log( self ):
     return self.__log
+
+  @classmethod
+  def getLog( cls ):
+    return cls.__log
+
 
   @classmethod
   def getRoute( cls ):

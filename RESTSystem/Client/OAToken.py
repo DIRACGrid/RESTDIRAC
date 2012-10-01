@@ -151,8 +151,8 @@ class OAToken( object ):
 
   #Codes
   @RemoteMethod
-  def generateCode( self, cid, userDN, userGroup, lifeTime, scope = "" ):
-    return self.__getDB().generateCode( cid, userDN, userGroup, lifeTime, scope )
+  def generateCode( self, cid, userDN, userGroup, lifeTime, scope = "", redirect = "" ):
+    return self.__getDB().generateCode( cid, userDN, userGroup, lifeTime, scope, redirect )
 
   @RemoteMethod
   def getCodeData( self, code ):
@@ -165,8 +165,8 @@ class OAToken( object ):
 
   #Tokens
   @RemoteMethod
-  def generateTokenFromCode( self, cid, code, secret = False ):
-    return self.__getDB().generateTokenFromCode( cid, code, secret = False )
+  def generateTokenFromCode( self, cid, code, redirect = False, secret = False, renewable = True ):
+    return self.__getDB().generateTokenFromCode( cid, code, redirect, secret, renewable )
 
   @RemoteMethod
   def generateToken( self, user, group, scope = "", cid = False, secret = False, renewable = True, lifeTime = 86400 ):

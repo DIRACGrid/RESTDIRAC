@@ -47,7 +47,10 @@ if __name__ == "__main__":
     sys.exit( 1 )
 
   handlers = dict( ( handlers[ k ].getRoute(), handlers[k ] ) for k in handlers  )
-  handlers = [ ( k, handlers[k] ) for k in handlers ]
+  handlers = [ ( k, handlers[k] ) for k in sorted( handlers ) ]
+  gLogger.info( "Routes found:" )
+  for t in sorted( handlers ):
+    gLogger.info( " - %s : %s" % ( t[0], t[1].__name__ ) )
 
   app = web.Application( handlers, debug = True )
   loc = Locations.getHostCertificateAndKeyLocation()
