@@ -7,7 +7,7 @@ from RESTDIRAC.ConfigurationSystem.Client.Helpers.RESTConf import getCodeAuthURL
 class TokenHandler( RESTHandler ):
 
   ROUTE = "/oauth2/token"
-
+  REQUIRE_ACCESS = False
 
   class CodeGrant:
 

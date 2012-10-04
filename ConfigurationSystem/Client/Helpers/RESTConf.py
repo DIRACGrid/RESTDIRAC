@@ -1,7 +1,8 @@
 
 __RCSID__ = "$Id$"
 
-from DIRAC import S_OK, S_ERROR
+import os
+from DIRAC import S_OK, S_ERROR, rootPath
 from DIRAC.ConfigurationSystem.Client.Config import gConfig
 
 gBaseSection = "/RESTAPI"
@@ -11,6 +12,9 @@ def getOption( path, defaultValue = "" ):
 
 def getCodeAuthURL():
   return getOption( "CodeAuthURL" )
+
+def getWorkDir():
+  return getOption( "WorkDir", os.path.join( rootPath, "workDir", "REST" ) )
 
 def isOK():
   for option in ( "CodeAuthURL", ):

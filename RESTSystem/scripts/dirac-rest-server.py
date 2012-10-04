@@ -18,13 +18,11 @@ if __name__ == "__main__":
 
   localCfg = LocalConfiguration()
 
-  positionalArgs = localCfg.getPositionalArguments()
-
   localCfg.setConfigurationForWeb( "REST" )
-  #localCfg.addMandatoryEntry( "HandlerPath" )
   localCfg.addMandatoryEntry( "/DIRAC/Setup" )
   localCfg.addDefaultEntry( "/DIRAC/Security/UseServerCertificate", "yes" )
   localCfg.addDefaultEntry( "LogLevel", "INFO" )
+
   resultDict = localCfg.loadUserData()
   if not resultDict[ 'OK' ]:
     gLogger.initialize( serverName, "/" )
@@ -46,8 +44,8 @@ if __name__ == "__main__":
     gLogger.fatal( "No handlers found" )
     sys.exit( 1 )
 
-  handlers = dict( ( handlers[ k ].getRoute(), handlers[k ] ) for k in handlers  )
-  handlers = [ ( k, handlers[k] ) for k in sorted( handlers ) ]
+  handlers = dict( ( handlers[ k ].getRoute(), handlers[k] ) for k in handlers  )
+  handlers = [ ( k, handlers[k] ) for k in sorted( handlers ) if k ]
   gLogger.info( "Routes found:" )
   for t in sorted( handlers ):
     gLogger.info( " - %s : %s" % ( t[0], t[1].__name__ ) )

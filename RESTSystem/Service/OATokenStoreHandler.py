@@ -4,7 +4,7 @@ from DIRAC.Core.Utilities import DEncode
 from DIRAC.Core.Security import Properties
 from DIRAC.Core.DISET.RequestHandler import RequestHandler
 from RESTDIRAC.RESTSystem.DB.OATokenDB import OATokenDB
-from RESTDIRAC.RESTSystem.Client.OAToken import OAToken
+from RESTDIRAC.RESTSystem.Client import OAToken
 
 class OATokenStoreHandler( RequestHandler ):
 
@@ -20,15 +20,11 @@ class OATokenStoreHandler( RequestHandler ):
     result[ 'Value' ].close()
     #Try to do magic
     myStuff = dir( cls )
-    for method in dir( OAToken ):
+    for method in OAToken.__remoteMethods__:
       if method.find( "get" ) != 0 and method.find( "generate" ) != 0:
         continue
       if "export_%s" % method in myStuff:
         cls.log.info( "Wrapping method %s. It's already defined in the Handler" % method )
-#        defMeth = getattr( cls, "export_%s" % method )
-#        setattr( cls, "_usr_def_%s" % method, defMeth )
-#        setattr( cls, "types_%s" % method, [ ( types.IntType, types.LongType ), types.TupleType ] )
-#        setattr( cls, "export_%s" % method, cls.__unwrapAndCall )
       else:
         cls.log.info( "Mimicking method %s" % method )
         setattr( cls, "auth_%s" % method, [ 'authenticated' ] )
@@ -66,7 +62,7 @@ class OATokenStoreHandler( RequestHandler ):
     return getattr( self, "_usr_def_%s" % method )( *args, **kwargs )
 
   def __getOAToken( self ):
-    return OAToken( forceLocal = True )
+    return OAToken.OAToken( forceLocal = True )
 
   def __clientHasAccess( self ):
     return True

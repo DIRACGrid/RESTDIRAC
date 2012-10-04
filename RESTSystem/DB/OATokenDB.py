@@ -54,8 +54,9 @@ class OATokenDB( DB ):
     if 'OA_Code' not in OATokenDB.__tables:
       OATokenDB.__tables[ 'OA_Code' ] = { 'Fields' : { 'Code': 'CHAR(29) NOT NULL UNIQUE',
                                                        'ClientID': 'CHAR(28) NOT NULL',
-                                                       'UserDN': 'VARCHAR(128) DEFAULT NULL',
-                                                       'UserGroup': 'VARCHAR(16) DEFAULT NULL',
+                                                       'UserDN': 'VARCHAR(128) NOT NULL',
+                                                       'UserGroup': 'VARCHAR(16) NOT NULL',
+                                                       'UserSetup' : 'VARCHAR(32) NOT NULL',
                                                        'LifeTime' : 'INT UNSIGNED NOT NULL',
                                                        'Scope': 'VARCHAR(128) DEFAULT NULL',
                                                        'Redirect' : 'VARCHAR(128) DEFAULT NULL',
@@ -73,6 +74,7 @@ class OATokenDB( DB ):
                                                          'UserName': 'VARCHAR(16) NOT NULL',
                                                          'UserDN': 'VARCHAR(128) NOT NULL',
                                                          'UserGroup': 'VARCHAR(16) NOT NULL',
+                                                         'UserSetup': 'VARCHAR(32) NOT NULL',
                                                          'Scope': 'VARCHAR(128)',
                                                          'Expiration': 'DATETIME NOT NULL',
                                                          'Class' : 'ENUM( "Access", "Refresh" ) NOT NULL',
@@ -195,7 +197,7 @@ class OATokenDB( DB ):
   #
   #############################
 
-  def generateCode( self, cid, userDN, userGroup, lifeTime, scope = "", redirect = "" ):
+  def generateCode( self, cid, userDN, userGroup, userSetup, lifeTime, scope = "", redirect = "" ):
     try:
       if redirect:
         pr = urlparse.urlparse( redirect )
@@ -212,6 +214,7 @@ class OATokenDB( DB ):
                'Expiration' : "TIMESTAMPADD( SECOND, %s, UTC_TIMESTAMP() )" % 600,
                'UserDN' : userDN,
                'UserGroup' : userGroup,
+               'UserSetup' : userSetup,
                'LifeTime' : lifeTime }
     if scope:
       inData[ 'Scope' ] = scope
@@ -272,17 +275,18 @@ class OATokenDB( DB ):
       self.deleteCode( code )
       return S_ERROR( "Code has already been used! Invalidating all related tokens" )
 
-    return self.generateToken( codeData[ 'UserDN' ], codeData[ 'UserGroup' ], scope = codeData[ 'Scope' ],
-                               cid = codeData[ 'ClientID' ], secret = secret, renewable = renewable,
-                               code = codeData[ 'Code' ], lifeTime = codeData[ 'LifeTime' ] )
+    return self.generateToken( codeData[ 'UserDN' ], codeData[ 'UserGroup' ], codeData[ 'UserSetup' ],
+                               scope = codeData[ 'Scope' ], cid = codeData[ 'ClientID' ], secret = secret,
+                               renewable = renewable, code = codeData[ 'Code' ],
+                               lifeTime = codeData[ 'LifeTime' ] )
 
-  def generateToken( self, userDN, userGroup, scope = "", cid = False,
+  def generateToken( self, userDN, userGroup, userSetup, scope = "", cid = False,
                      secret = False, renewable = True, lifeTime = 86400, code = False ):
     tokenClass = [ 'Access' ]
     if renewable:
       tokenClass.append( 'Refresh' )
 
-    inData = { 'UserDN' : userDN, 'UserGroup' : userGroup }
+    inData = { 'UserDN' : userDN, 'UserGroup' : userGroup, 'UserSetup' : userSetup }
     if scope:
       inData[ 'Scope' ] = scope
     if code:

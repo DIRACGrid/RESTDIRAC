@@ -10,17 +10,15 @@ __remoteMethods__ = []
 
 def RemoteMethod( method ):
 
-  __remoteMethods__.append( method )
+  __remoteMethods__.append( method.__name__ )
 
   @functools.wraps( method )
   def wrapper( self, *args, **kwargs ):
     if self.localAccess:
       return method( self, *args, **kwargs )
     rpc = self._getTokenStoreClient()
-    args = ( self, ) + args
-    fArgs = getcallargs( method, *args, **kwargs )
     fName = method.__name__
-    return getattr( rpc, fName )( fArgs )
+    return getattr( rpc, fName )( ( args, kwargs ) )
 
   wrapper.__sneakybastard__ = method
   return wrapper
@@ -35,6 +33,10 @@ class Cache( object ):
     self.__cache = self.__caches[ cName ]
     self.__atName = atName
     self.__cacheTime = cacheTime
+
+  @classmethod
+  def getCache( cls, cName ):
+    return cls.__caches[ cName ]
 
   def __call__( self, method ):
 
@@ -53,6 +55,8 @@ class Cache( object ):
       if value:
         return value
       value = rMethod( **fArgs )
+      if not value[ 'OK' ]:
+        return value
       self.__cache.add( cKey, self.__cacheTime, value )
       return value
 
@@ -119,7 +123,6 @@ class OAToken( object ):
   def _getTokenStoreClient( self ):
     return self.__getRPCFunctor( "REST/OATokenStore" )
 
-
   #Client creation
   @Cache( 'client', 'name' )
   @RemoteMethod
@@ -151,8 +154,8 @@ class OAToken( object ):
 
   #Codes
   @RemoteMethod
-  def generateCode( self, cid, userDN, userGroup, lifeTime, scope = "", redirect = "" ):
-    return self.__getDB().generateCode( cid, userDN, userGroup, lifeTime, scope, redirect )
+  def generateCode( self, cid, userDN, userGroup, userSetup, lifeTime, scope = "", redirect = "" ):
+    return self.__getDB().generateCode( cid, userDN, userGroup, userSetup, lifeTime, scope, redirect )
 
   @RemoteMethod
   def getCodeData( self, code ):
@@ -169,8 +172,24 @@ class OAToken( object ):
     return self.__getDB().generateTokenFromCode( cid, code, redirect, secret, renewable )
 
   @RemoteMethod
-  def generateToken( self, user, group, scope = "", cid = False, secret = False, renewable = True, lifeTime = 86400 ):
-    return self.__getDB().generateToken( user, group, scope, cid, secret, renewable, lifeTime )
+  def generateToken( self, user, group, setup, scope = "", cid = False, secret = False, renewable = True, lifeTime = 86400 ):
+    return self.__getDB().generateToken( user, group, setup, scope, cid, secret, renewable, lifeTime )
+
+  def getCachedToken( self, token ):
+    cacheDict = Cache.getCache( 'token' )
+    cKey = ( token, )
+    value = cacheDict.get( cKey )
+    if value:
+      return value
+    result = self.getTokensData( {} )
+    if not result[ 'OK' ]:
+      return result
+    tokenData = result[ 'Value' ]
+    for tokenKey in tokenData:
+      cacheDict.add( ( tokenKey, ), 300, S_OK( tokenData[ tokenKey ] ) )
+    if token in tokenData:
+      return S_OK( tokenData[ token ] )
+    return S_ERROR( "Unknown token" )
 
   @Cache( 'token' )
   @RemoteMethod

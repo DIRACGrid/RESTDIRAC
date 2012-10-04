@@ -8,13 +8,21 @@ from RESTDIRAC.ConfigurationSystem.Client.Helpers.RESTConf import getCodeAuthURL
 class AuthHandler( RESTHandler ):
 
   ROUTE = "/oauth2/(auth|groups)"
+  REQUIRE_ACCESS = False
   __oaToken = OAToken()
 
+  def post( self, *args, **kwargs ):
+    return self.get( *args, **kwargs )
+
   @web.asynchronous
-  @gen.engine
   def get( self, reqType ):
     #Show available groups for certificate
     if reqType == "groups":
+      return self.groupsAction()
+    elif reqType == "auth":
+      return self.authAction()
+
+  def groupsAction( self ):
       result = self.__getGroups()
       if not result.ok:
         self.log.error( result.msg )
@@ -23,6 +31,8 @@ class AuthHandler( RESTHandler ):
       self.finish( result.data )
       return
 
+  @gen.engine
+  def authAction( self ):
     #Auth
     args = self.request.arguments
     try:
@@ -53,33 +63,6 @@ class AuthHandler( RESTHandler ):
       #ERROR!
       self.send_error( 400 )
 
-
-
-  def __codeRequest( self ):
-    try:
-      cid = args[ 'client_id' ]
-    except KeyError:
-      return WErr( 400, "Missing client_id"  )
-    result = self.__oaToken.getClientDataByID( cid )
-    if not result[ 'OK' ]:
-      return WErr( 401, "Could not retrieve client info: %s" % result[ 'Message' ] )
-    cliData = result[ 'Value' ]
-    self.log.notice( "Authenticated valid client %s ( %s )" % ( cliData[ 'Name' ], cliData[ 'ClientID' ] )  )
-    kw = {}
-    for k in ( 'redirect_uri', 'scope', 'state' ):
-      if k in args:
-        value = args[k]
-        if k == 'redirect_uri':
-          k = 'redirect'
-        kw[ k ] = value[0]
-    result = self.__oaToken.generateCode( cid, **kw )
-    if not result[ 'OK' ]:
-      return WErr( 500, result[ 'Value' ] )
-    codeData = { 'code' : result[ 'Value' ][ 'Code' ] }
-    if 'state' in kw:
-      codeData[ 'state' ] = kw[ 'state' ]
-
-    return WOK( codeData )
 
   def __getGroups( self, DN = False ):
     if not DN:

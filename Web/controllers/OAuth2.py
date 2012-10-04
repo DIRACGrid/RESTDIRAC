@@ -149,7 +149,8 @@ class Oauth2Controller( BaseController ):
     if 'grant' not in request.params or str( request.params[ 'grant' ] ) != "Grant":
       return redirect_to( redirect, error = "access_denied" )
 
-    kw = { 'cid' : cid, 'userDN' : uDN, 'userGroup' : uGroup, 'lifeTime' : lifeTime }
+    kw = { 'cid' : cid, 'userDN' : uDN, 'userGroup' : uGroup,
+           'userSetup' : getSelectedSetup(), 'lifeTime' : lifeTime }
     if 'scope' in request.params:
       kw[ 'scope' ] = str( request.params[ 'scope' ] )
     if qRedirect:
