@@ -94,8 +94,6 @@ class JobHandler( RESTHandler ):
     return WOK( retData )
 
 
-
-
   @web.asynchronous
   @gen.engine
   def get( self, jid ):
@@ -110,9 +108,21 @@ class JobHandler( RESTHandler ):
           jAtt = attrPair[0]
           if jAtt in self.request.arguments:
             selDict[ attrPair[1] ] = self.request.arguments[ jAtt ]
-      if 'allOwners' not in self.request.arguments:
+      args = self.request.arguments
+      if 'allOwners' not in args:
         selDict[ 'Owner' ] = self.getUserName()
-    result = yield self.threadTask( self._getJobs, selDict )
+      if 'startJob' in args:
+        try:
+          startJob = max( startJob, int( args[ 'startJob' ][-1] ) )
+        except ValueError:
+          raise WErr( 400, reason = "startJob has to be an integer" )
+      if 'maxJobs' in args:
+        try:
+          maxJobs = max( maxJobs, int( args[ 'maxJobs' ][-1] ) )
+        except ValueError:
+          raise WErr( 400, reason = "maxJobs has to be an integer" )
+
+    result = yield self.threadTask( self._getJobs, selDict, startJob, maxJobs )
     if not result.ok:
       raise result
     data = result.data
@@ -123,6 +133,7 @@ class JobHandler( RESTHandler ):
       raise WErr( 404, "Unknown jid" )
     self.finish( data[ 'jobs' ][0] )
 
+  #POST A JOB :)
 
   def uploadSandbox( self, fileData ):
     with TmpDir as tmpDir:
@@ -193,6 +204,8 @@ class JobHandler( RESTHandler ):
     self.log.info( "Got jids %s" % jids )
 
     self.finish( { 'jids' : jids } )
+
+  #KILL A JOB
 
 
   @web.asynchronous
