@@ -5,14 +5,16 @@
 
 <%
 htmlCode = "<form action='grantAccess' method='post'>"
-htmlCode += "<input type='hidden' name='verifier' value='%s'/>" % c.verifier
-htmlCode += "<input type='hidden' name='request' value='%s'/>" % c.request
-htmlCode += "<input type='hidden' name='consumerKey' value='%s'/>" % c.consumerKey
-htmlCode += "<input type='hidden' name='callback' value='%s'/>" % c.callback
+htmlCode += "<input type='hidden' name='cid' value='%s'/>" % c.cID
+htmlCode += "<input type='hidden' name='redirect' value='%s'/>" % c.redirect
+if c.scope:
+	htmlCode += "<input type='hidden' name='scope' value='%s'/>" % c.scope
+if c.state:
+	htmlCode += "<input type='hidden' name='state' value='%s'/>" % c.state
 htmlCode += "<table class='access'>"
-htmlCode += "<tr><td class='header'>Do you grant access %s to access your account in DIRAC?</td>" % c.consName
-if c.consImg:
-  htmlCode += "<td rowspan=3><img src='%s'/></td>" % c.consImg
+htmlCode += "<tr><td class='header'>Do you grant access %s to access your account in DIRAC?</td>" % c.cName
+if c.cImg:
+  htmlCode += "<td rowspan=3><img src='%s'/></td>" % c.cImg
 htmlCode += "</tr>"
 htmlCode += "<tr><td>You are %s with group <b>%s</b><br/> If you want to change group, please do so before granting access.</td></tr>" % ( c.userDN, c.userGroup )
 htmlCode += "<tr><td>You're granting access for <input type='text' name='accessTime' value='24' size='2'/> hours<td></tr>"
