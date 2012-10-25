@@ -6,7 +6,7 @@ from DIRAC import S_OK, S_ERROR, rootPath
 from DIRAC.ConfigurationSystem.Client.Config import gConfig
 from DIRAC.Core.Security import Locations, X509Chain
 
-gBaseSection = "/RESTAPI"
+gBaseSection = "/REST"
 
 def getOption( path, defaultValue = "" ):
   return gConfig.getValue( "%s/%s" % ( gBaseSection, path ), defaultValue )

@@ -2,7 +2,7 @@
 import ssl
 import sys
 
-from tornado import web, httpserver, ioloop, process
+from tornado import web, httpserver, ioloop, process, autoreload
 from DIRAC import gLogger, S_OK, S_ERROR
 from DIRAC.Core.Utilities.ObjectLoader import ObjectLoader
 from RESTDIRAC.RESTSystem.Base.RESTHandler import RESTHandler
@@ -24,6 +24,8 @@ class RESTApp( object ):
     request_time = 1000.0 * handler.request.request_time()
     logm( "%d %s %.2fms" % ( status, handler._request_summary(), request_time ) )
 
+  def __reloadAppCB( self ):
+     gLogger.notice( "\n !!!!!! Reloading web app...\n" )
 
   def bootstrap( self ):
     gLogger.always( "\n  === Bootstrapping REST Server ===  \n" )
@@ -46,6 +48,8 @@ class RESTApp( object ):
     if balancer and RESTConf.numProcesses not in ( 0, 1 ):
       process.fork_processes( RESTConf.numProcesses(), max_restarts = 0 )
       kw[ 'debug' ] = False
+    if kw[ 'debug' ]:
+      gLogger.always( "Starting in debug mode" )
     self.__app = web.Application( self.__routes, **kw )
     port = RESTConf.port()
     if balancer:
@@ -68,6 +72,7 @@ class RESTApp( object ):
     else:
       url = "http://0.0.0.0:%s" % port
     gLogger.always( "Starting REST server on %s" % url )
+    autoreload.add_reload_hook( self.__reloadAppCB )
     ioloop.IOLoop.instance().start()
 
 

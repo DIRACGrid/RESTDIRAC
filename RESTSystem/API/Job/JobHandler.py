@@ -136,7 +136,7 @@ class JobHandler( RESTHandler ):
   #POST A JOB :)
 
   def uploadSandbox( self, fileData ):
-    with TmpDir as tmpDir:
+    with TmpDir() as tmpDir:
       fileList = []
       for fName in fileData:
         for entry in fileData[ fName ]:

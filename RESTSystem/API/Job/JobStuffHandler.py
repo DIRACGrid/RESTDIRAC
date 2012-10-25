@@ -52,7 +52,7 @@ class JobStuffHandler( RESTHandler ):
   @web.asynchronous
   @gen.engine
   def get( self, jid, objName ):
-    if objName == "description":
+    if objName == "manifest":
       result = yield self.threadTask( self._getJobManifest, jid )
       if not result.ok:
         self.log.error( result.msg )
