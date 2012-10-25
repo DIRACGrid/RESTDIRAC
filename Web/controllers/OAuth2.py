@@ -106,7 +106,7 @@ class Oauth2Controller( BaseController ):
     c.cName = cData[ 'Name' ]
     c.cImg = cData[ 'Icon' ]
     c.cID = cid
-    if c.redirect:
+    if redirect:
       c.redirect = base64.urlsafe_b64encode( redirect )
     c.userDN = getUserDN()
     c.userGroup = getSelectedGroup()

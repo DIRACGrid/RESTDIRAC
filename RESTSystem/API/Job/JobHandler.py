@@ -4,7 +4,7 @@ import os
 import shutil
 import json
 from tornado import web, gen
-from RESTDIRAC.RESTSystem.API.RESTHandler import WErr, WOK, TmpDir, RESTHandler
+from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, TmpDir, RESTHandler
 from DIRAC.Core.DISET.RPCClient import RPCClient
 from DIRAC.WorkloadManagementSystem.Client.SandboxStoreClient import SandboxStoreClient
 from DIRAC.Core.Utilities import List, CFG
@@ -97,12 +97,12 @@ class JobHandler( RESTHandler ):
   @web.asynchronous
   @gen.engine
   def get( self, jid ):
+    startJob = 0
+    maxJobs = 100
     if jid:
       selDict = { 'JobID' : int( jid ) }
     else:
       selDict = {}
-      startJob = 0
-      maxJobs = 100
       for convList in ( self.ATTRIBUTES, self.FLAGS ):
         for attrPair in convList:
           jAtt = attrPair[0]

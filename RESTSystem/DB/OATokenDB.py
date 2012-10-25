@@ -219,7 +219,7 @@ class OATokenDB( DB ):
     if scope:
       inData[ 'Scope' ] = scope
     if redirect:
-      inData[ 'Redirect' ]
+      inData[ 'Redirect' ] = redirect
     while True:
       inData[ 'Code' ] = self.__hash( "%s|%s" % ( cid, type ) )
       result = self.insertFields( "OA_Code", inDict = inData )

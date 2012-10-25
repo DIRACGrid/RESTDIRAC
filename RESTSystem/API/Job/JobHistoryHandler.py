@@ -4,7 +4,7 @@ import os
 import shutil
 import datetime
 from tornado import web, gen
-from RESTDIRAC.RESTSystem.API.RESTHandler import WErr, WOK, TmpDir, RESTHandler
+from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, TmpDir, RESTHandler
 from DIRAC.AccountingSystem.Client.ReportsClient import ReportsClient
 
 

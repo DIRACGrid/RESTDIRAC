@@ -4,7 +4,7 @@ import os
 import shutil
 import json
 from tornado import web, gen
-from RESTDIRAC.RESTSystem.API.RESTHandler import WErr, WOK, TmpDir, RESTHandler
+from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, TmpDir, RESTHandler
 from DIRAC.Core.DISET.RPCClient import RPCClient
 from DIRAC.WorkloadManagementSystem.Client.SandboxStoreClient import SandboxStoreClient
 from DIRAC.Core.Utilities import List, CFG

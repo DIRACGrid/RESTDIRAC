@@ -1,6 +1,6 @@
 
 from tornado import web, gen
-from RESTDIRAC.RESTSystem.API.RESTHandler import RESTHandler, WErr, WOK
+from RESTDIRAC.RESTSystem.Base.RESTHandler import RESTHandler, WErr, WOK
 from RESTDIRAC.RESTSystem.Client.OAToken import OAToken
 from DIRAC.ConfigurationSystem.Client.Helpers import Registry
 from RESTDIRAC.ConfigurationSystem.Client.Helpers.RESTConf import getCodeAuthURL

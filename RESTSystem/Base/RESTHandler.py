@@ -61,6 +61,12 @@ class TmpDir( object ):
     return self.__tmpDir
 
 
+def asyncThreadTask( method ):
+  """
+  Helper for async decorators
+  """
+  return tornado.web.asynchronous( tornado.gen.engine( method ) )
+
 class RESTHandler( tornado.web.RequestHandler ):
 
   ROUTE = False
