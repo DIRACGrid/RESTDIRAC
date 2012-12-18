@@ -118,7 +118,12 @@ class OAToken( object ):
     return False
 
   def __getDB( self ):
-    return OAToken.__db.token
+    db = OAToken.__db.token
+    if db:
+      return db
+    #TODO: Return proper thing to generate S_ERROR
+    return db
+
 
   def _getTokenStoreClient( self ):
     return self.__getRPCFunctor( "REST/OATokenStore" )
