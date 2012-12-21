@@ -2,8 +2,6 @@
 import sys
 from DIRAC.Core.Base import Script
 from DIRAC import gLogger
-from RESTDIRAC.ConfigurationSystem.Client.Helpers import RESTConf
-from RESTDIRAC.RESTSystem.private.RESTApp import RESTApp
 from DIRAC.ConfigurationSystem.Client.LocalConfiguration import LocalConfiguration
 
 
@@ -22,6 +20,9 @@ if __name__ == "__main__":
     gLogger.initialize( serverName, "/" )
     gLogger.error( "There were errors when loading configuration", resultDict[ 'Message' ] )
     sys.exit( 1 )
+
+  from RESTDIRAC.ConfigurationSystem.Client.Helpers import RESTConf
+  from RESTDIRAC.RESTSystem.private.RESTApp import RESTApp
 
   result = RESTConf.isOK()
   if not result[ 'OK' ]:
