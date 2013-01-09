@@ -35,9 +35,16 @@ class AuthHandler( RESTHandler ):
   def authAction( self ):
     #Auth
     args = self.request.arguments
-    try:
-      respType = args[ 'response_type' ][0]
-    except KeyError:
+    respType = False
+    if 'response_type' in args and args[ 'response_type' ][0] == 'code':
+      respType = 'code'
+    if 'grant_type' in args and args[ 'grant_type' ][0] == 'client_credentials':
+      if respType:
+        #Already defined a response type
+        self.send_error( 400 )
+        return
+      respType = 'client_credentials'
+    if not respType:
       #Bad request
       self.send_error( 400 )
       return
@@ -53,8 +60,7 @@ class AuthHandler( RESTHandler ):
       result = yield( self.threadTask( self.__clientCredentialsRequest ) )
       if not result.ok:
         self.log.error( result.msg )
-        self.send_error( result.code )
-        return
+        raise result
       self.finish( result.data )
     elif respType in ( "token", "password" ):
       #Not implemented
@@ -83,6 +89,10 @@ class AuthHandler( RESTHandler ):
       group = args[ 'group' ][0]
     except KeyError:
       return WErr( 400, "Missing user group" )
+    try:
+      setup = args[ 'setup' ][0]
+    except KeyError:
+      return WErr( 400, "Missing setup" )
     credDict = self.getClientCredentials()
     if not credDict:
       return WErr( 401, "No certificate received to issue a token" )
@@ -98,8 +108,8 @@ class AuthHandler( RESTHandler ):
       return WErr( 401, "Invalid group %s for %s (valid %s)" % ( group, DN, groups ) )
     scope = False
     if 'scope' in args:
-      scole = args[ 'scope' ]
-    result = self.__oaToken.generateToken( DN, group, scope = scope, renewable = False )
+      scope = args[ 'scope' ]
+    result = self.__oaToken.generateToken( DN, group, setup, scope = scope, renewable = False )
     if not result[ 'OK' ]:
       return WErr( 500, "Error generating token: %s" % result[ 'Message' ] )
     data = result[ 'Value' ][ 'Access' ]
