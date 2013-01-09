@@ -1,5 +1,6 @@
 
 from tornado import web, gen
+from DIRAC import gConfig
 from RESTDIRAC.RESTSystem.Base.RESTHandler import RESTHandler, WErr, WOK
 from RESTDIRAC.RESTSystem.Client.OAToken import OAToken
 from DIRAC.ConfigurationSystem.Client.Helpers import Registry
@@ -7,7 +8,7 @@ from RESTDIRAC.ConfigurationSystem.Client.Helpers.RESTConf import getCodeAuthURL
 
 class AuthHandler( RESTHandler ):
 
-  ROUTE = "/oauth2/(auth|groups)"
+  ROUTE = "/oauth2/(auth|groups|setups)"
   REQUIRE_ACCESS = False
   __oaToken = OAToken()
 
@@ -19,6 +20,8 @@ class AuthHandler( RESTHandler ):
     #Show available groups for certificate
     if reqType == "groups":
       return self.groupsAction()
+    elif reqType == "setups":
+      return self.setupsAction()
     elif reqType == "auth":
       return self.authAction()
 
@@ -30,6 +33,9 @@ class AuthHandler( RESTHandler ):
         return
       self.finish( result.data )
       return
+
+  def setupsAction( self ):
+    self.finish( { 'setups' : gConfig.getSections( "/DIRAC/Setups" )[ 'Value' ] } )
 
   @gen.engine
   def authAction( self ):
@@ -106,6 +112,8 @@ class AuthHandler( RESTHandler ):
     groups = result.data[ 'groups' ]
     if group not in groups:
       return WErr( 401, "Invalid group %s for %s (valid %s)" % ( group, DN, groups ) )
+    if setup not in gConfig.getSections( "/DIRAC/Setups" )[ 'Value' ]:
+      return WErr( 401, "Invalid setup %s for %s" % ( setup, DN ) )
     scope = False
     if 'scope' in args:
       scope = args[ 'scope' ]
