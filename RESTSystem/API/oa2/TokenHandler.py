@@ -1,4 +1,5 @@
 from tornado import web, gen
+from DIRAC import gConfig
 from RESTDIRAC.RESTSystem.Base.RESTHandler import RESTHandler, WErr, WOK
 from RESTDIRAC.RESTSystem.Client.OAToken import OAToken
 from DIRAC.ConfigurationSystem.Client.Helpers import Registry
@@ -6,15 +7,16 @@ from RESTDIRAC.ConfigurationSystem.Client.Helpers.RESTConf import getCodeAuthURL
 
 class TokenHandler( RESTHandler ):
 
-  ROUTE = "/oauth2/token"
+  ROUTE = "/oauth2/(token|groups|setups)"
   REQUIRE_ACCESS = False
+
+  __oaToken = OAToken()
 
   class CodeGrant:
 
-    __oaToken = OAToken()
-
-    def __init__( self, args ):
+    def __init__( self, args, oaToken ):
       self.args = args
+      self.oaToken = oaToken
       self.error = False
       self.log = TokenHandler.getLog()
       #Look for required params
@@ -35,12 +37,12 @@ class TokenHandler( RESTHandler ):
 
     def issueCode( self ):
       #Load client stuff
-      result = self.__oaToken.getClientDataByID( self.cid )
+      result = self.oaToken.getClientDataByID( self.cid )
       if not result[ 'OK' ]:
         self.log.error( "Could not retrieve client data for id %s: %s" % ( self.cid, result[ 'Message' ] ) )
         return { 'error' :  'invalid_client' }
       cData = result[ 'Value' ]
-      result = self.__oaToken.generateTokenFromCode( self.cid, self.code,
+      result = self.oaToken.generateTokenFromCode( self.cid, self.code,
                                                      redirect = self.redirect, renewable = True )
       if not result[ 'OK' ]:
         self.log.error( "Could not geneate token for %s: %s" % ( self, result[ 'Message' ] ) )
@@ -53,12 +55,46 @@ class TokenHandler( RESTHandler ):
                'refresh_token' : data[ 'Refresh' ][ 'Token' ] }
 
   #POST == GET
-  def post( self ):
-    return self.get()
+  def post( self, *args, **kwargs ):
+    return self.get( *args, **kwargs )
 
   @web.asynchronous
+  def get( self, reqType ):
+    #Show available groups for certificate
+    if reqType == "groups":
+      return self.groupsAction()
+    elif reqType == "setups":
+      return self.setupsAction()
+    elif reqType == "token":
+      return self.tokenAction()
+
+  def __getGroups( self, DN = False ):
+    if not DN:
+      credDict = self.getClientCredentials()
+      if not credDict:
+        return WErr( 401, "No certificate received to issue a token" )
+      DN = credDict[ 'subject' ]
+      if not credDict[ 'validDN' ]:
+       return WErr( 401, "Unknown DN %s" % DN )
+    result = Registry.getGroupsForDN( DN )
+    if not result[ 'OK' ]:
+      return WErr( 500, result[ 'Message' ] )
+    return WOK( { 'groups' : result[ 'Value' ] } )
+
+  def groupsAction( self ):
+      result = self.__getGroups()
+      if not result.ok:
+        self.log.error( result.msg )
+        self.send_error( result.code )
+        return
+      self.finish( result.data )
+      return
+
+  def setupsAction( self ):
+    self.finish( { 'setups' : gConfig.getSections( "/DIRAC/Setups" )[ 'Value' ] } )
+
   @gen.engine
-  def get( self ):
+  def tokenAction( self ):
     args = self.request.arguments
     try:
       grant = args[ 'grant_type' ][0]
@@ -66,7 +102,7 @@ class TokenHandler( RESTHandler ):
       self.send_error( 400 )
       return
     if grant == 'authorization_code':
-      cg = TokenHandler.CodeGrant( args )
+      cg = TokenHandler.CodeGrant( args, self.__oaToken )
       if cg.error:
         self.log.error( "Auth grant error: %s" % cg.error )
         self.finish( { 'error' : cg.error } )
@@ -75,10 +111,53 @@ class TokenHandler( RESTHandler ):
       result = yield self.threadTask( cg.issueCode )
       self.finish( result )
       return
+    if grant == "client_credentials":
+      result = yield( self.threadTask( self.__clientCredentialsRequest ) )
+      if not result.ok:
+        self.log.error( result.msg )
+        raise result
+      self.finish( result.data )
     elif grant == "refresh_token":
       #Not yet done :P
       pass
     self.finish( { 'error' : 'unsupported_grant_type' } )
 
+  def __clientCredentialsRequest( self ):
+    args = self.request.arguments
+    try:
+      group = args[ 'group' ][0]
+    except KeyError:
+      return WErr( 400, "Missing user group" )
+    try:
+      setup = args[ 'setup' ][0]
+    except KeyError:
+      return WErr( 400, "Missing setup" )
+    credDict = self.getClientCredentials()
+    if not credDict:
+      return WErr( 401, "No certificate received to issue a token" )
+    DN = credDict[ 'subject' ]
+    if not credDict[ 'validDN' ]:
+      return WErr( 401, "Unknown DN %s" % DN )
+    #Check group
+    result = self.__getGroups( DN )
+    if not result.ok:
+      return result
+    groups = result.data[ 'groups' ]
+    if group not in groups:
+      return WErr( 401, "Invalid group %s for %s (valid %s)" % ( group, DN, groups ) )
+    if setup not in gConfig.getSections( "/DIRAC/Setups" )[ 'Value' ]:
+      return WErr( 401, "Invalid setup %s for %s" % ( setup, DN ) )
+    scope = False
+    if 'scope' in args:
+      scope = args[ 'scope' ]
+    result = self.__oaToken.generateToken( DN, group, setup, scope = scope, renewable = False )
+    if not result[ 'OK' ]:
+      return WErr( 500, "Error generating token: %s" % result[ 'Message' ] )
+    data = result[ 'Value' ][ 'Access' ]
+    res = {}
+    for ki, ko in ( ( "LifeTime", "expires_in" ), ( 'Token', 'token' ) ):
+      if ki in data:
+        res[ ko ] = data[ ki ]
 
+    return WOK( res )
 
