@@ -117,6 +117,7 @@ class TokenHandler( RESTHandler ):
         self.log.error( result.msg )
         raise result
       self.finish( result.data )
+      return
     elif grant == "refresh_token":
       #Not yet done :P
       pass
