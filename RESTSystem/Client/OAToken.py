@@ -15,6 +15,8 @@ def RemoteMethod( method ):
   @functools.wraps( method )
   def wrapper( self, *args, **kwargs ):
     if self.localAccess:
+      if not self.dbOK:
+        return S_ERROR( "Could not connect to the database" )
       return method( self, *args, **kwargs )
     rpc = self._getTokenStoreClient()
     fName = method.__name__
@@ -29,7 +31,10 @@ class Cache( object ):
 
   def __init__( self, cName, atName = False, cacheTime = 300 ):
     if cName not in self.__caches:
-      self.__caches[ cName ] = DictCache()
+      try:
+        self.__caches[ cName ] = DictCache()
+      except:
+        self.__caches[ cName ] = DictCache.DictCache()
     self.__cache = self.__caches[ cName ]
     self.__atName = atName
     self.__cacheTime = cacheTime
@@ -76,7 +81,10 @@ class OAToken( object ):
       self.token = False
 
   __db = DBHold()
-  __cache = DictCache()
+  try:
+    __cache = DictCache()
+  except:
+    __cache = DictCache.DictCache()
 
   _sDisableLocal = False
 
@@ -104,16 +112,24 @@ class OAToken( object ):
             break
           else:
             result[ 'Value' ].close()
-        except ( ImportError, RuntimeError ):
+        except ( ImportError, RuntimeError ), excp:
+          gLogger.exception( "" )
           if self.__forceLocal:
             raise
           OAToken.__db.reset()
           break
+
   @property
   def localAccess( self ):
     if OAToken._sDisableLocal:
       return False
     if OAToken.__db.token or self.__forceLocal:
+      return True
+    return False
+
+  @property
+  def dbOK( self ):
+    if OAToken.__db.token:
       return True
     return False
 

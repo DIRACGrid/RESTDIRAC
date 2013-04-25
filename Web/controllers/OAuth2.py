@@ -67,7 +67,7 @@ class Oauth2Controller( BaseController ):
     return defaultRedirect()
 
   def index( self ):
-    return redirect_to( action = "authorizeCode" )
+    return redirect_to( action = "authorizeCode", **request.params )
 
   def authorizeCode( self ):
     #Check the setup is allright

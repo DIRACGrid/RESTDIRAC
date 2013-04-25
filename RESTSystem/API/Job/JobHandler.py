@@ -206,16 +206,22 @@ class JobHandler( RESTHandler ):
     self.finish( { 'jids' : jids } )
 
   #KILL A JOB
-
-
   @web.asynchronous
   @gen.engine
   def delete( self, jid ):
     if not jid:
       self.send_error( 404 )
       return
+    try:
+      jid = int( jid )
+    except ValueError:
+      raise WErr( 400, "Invalid jid" )
     rpc = RPCClient( 'WorkloadManagement/JobManager' )
-    result = yield self.threadTask(  rpc.killJob, jid  )
+    args = self.request.arguments
+    if 'killonly' in args and args[ 'killonly' ]:
+      result = yield self.threadTask(  rpc.killJob, [ jid ]  )
+    else:
+      result = yield self.threadTask(  rpc.deleteJob, [ jid ]  )
     if not result[ 'OK' ]:
       if 'NonauthorizedJobIDs' in result:
         #Not authorized
