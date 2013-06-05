@@ -1,3 +1,4 @@
-# Everything is created by the DB object upon instantiatiation if it does not exists.
+# Everything is created by the DB object upon instantiation if it does not exists.
+
 use OATokenDB;
 
