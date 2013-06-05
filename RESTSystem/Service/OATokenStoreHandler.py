@@ -6,6 +6,8 @@ from DIRAC.Core.DISET.RequestHandler import RequestHandler
 from RESTDIRAC.RESTSystem.DB.OATokenDB import OATokenDB
 from RESTDIRAC.RESTSystem.Client import OAToken
 
+__RCSID__ = "$Id$"
+
 class OATokenStoreHandler( RequestHandler ):
 
   @classmethod
