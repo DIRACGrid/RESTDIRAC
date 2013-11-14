@@ -29,6 +29,10 @@ class WErr( tornado.web.HTTPError ):
   def __str__( self ):
     return super( tornado.web.HTTPError, self ).__str__()
 
+  @staticmethod
+  def fromError( res, code = 500 ):
+    return WErr( code = code, msg = res[ 'Message' ] )
+
 
 class WOK( object ):
   def __init__( self, data = False, **kwargs ):

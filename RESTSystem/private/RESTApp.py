@@ -29,7 +29,7 @@ class RESTApp( object ):
 
   def bootstrap( self ):
     gLogger.always( "\n  === Bootstrapping REST Server ===  \n" )
-    ol = ObjectLoader()
+    ol = ObjectLoader( [ 'DIRAC', 'RESTDIRAC' ] )
     result = ol.getObjects( "RESTSystem.API", parentClass = RESTHandler, recurse = True )
     if not result[ 'OK' ]:
       return result
@@ -38,7 +38,7 @@ class RESTApp( object ):
     if not self.__handlers:
       return S_ERROR( "No handlers found" )
 
-    self.__routes = [ ( self.__handlers[ k ].getRoute(), self.__handlers[k] ) for k in self.__handlers  ]
+    self.__routes = [ ( self.__handlers[ k ].getRoute(), self.__handlers[k] ) for k in self.__handlers if self.__handlers[ k ].getRoute()  ]
     gLogger.info( "Routes found:" )
     for t in sorted( self.__routes ):
       gLogger.info( " - %s : %s" % ( t[0], t[1].__name__ ) )
