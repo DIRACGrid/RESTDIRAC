@@ -9,7 +9,7 @@ from RESTDIRAC.RESTSystem.API.FileCatalogue.BaseFC import BaseFC
 
 class DirectoryHandler( BaseFC ):
 
-  ROUTE = "/filecatalog/directory(?:/([a-zA-Z0-9=-_]+)(?:/([a-z]+))?)?"
+  ROUTE = "/filecatalogue/directory(?:/([a-zA-Z0-9=-_]+)(?:/([a-z]+))?)?"
 
   @web.asynchronous
   def get( self, did, obj ):

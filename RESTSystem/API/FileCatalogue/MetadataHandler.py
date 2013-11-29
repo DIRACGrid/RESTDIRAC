@@ -7,7 +7,7 @@ from RESTDIRAC.RESTSystem.API.FileCatalogue.BaseFC import BaseFC
 
 class MetadataHandler( BaseFC ):
 
-  ROUTE = "/filecatalog/metadata"
+  ROUTE = "/filecatalogue/metadata"
 
   @web.asynchronous
   @gen.engine
@@ -20,7 +20,7 @@ class MetadataHandler( BaseFC ):
     fields = {}
     for k in data[ 'DirectoryMetaFields' ]:
       fields[ k ] = data[ 'DirectoryMetaFields' ][k].lower()
-    result = yield self.threadTask( self.__getRPC().getCompatibleMetadata, cond, "/" )
+    result = yield self.threadTask( self.rpc.getCompatibleMetadata, cond, "/" )
     if not result[ "OK" ] :
       raise WErr.fromError( result )
     values = result[ 'Value' ]
