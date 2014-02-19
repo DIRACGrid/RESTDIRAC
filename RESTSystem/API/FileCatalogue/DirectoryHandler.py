@@ -32,7 +32,7 @@ class DirectoryHandler( BaseFC ):
     result = yield self.threadTask( self.rpc.getCompatibleMetadata, cond, path )
     if not result[ "OK" ] :
       raise WErr.fromError( result )
-    self.finish( result[ 'Value' ] )
+    self.finish( self.sanitizeForJSON( result[ 'Value' ] ) )
 
 
   def __filterChildrenOf( self, root, dirDict ):
@@ -74,23 +74,33 @@ class DirectoryHandler( BaseFC ):
     if not result[ 'OK' ]:
       raise WErr.fromError( result )
     tree = self.__buildDirTree( path, result[ 'Value' ][ 'Successful' ] )
-    self.finish( { 'result' : tree } )
+    self.finish( self.sanitizeForJSON( tree ) )
 
   @gen.engine
   def __listDir( self, did ):
-    if not did:
-      path = "/"
-    else:
-      path = self.decodePath( did )
-    result = yield self.threadTask( self.rpc.listDirectory, path, True )
+    path = self.decodePath( did )
+    try:
+      pageSize = max( 0, int( self.request.arguments[ 'page_size' ][-1] ) )
+    except ( ValueError, KeyError ):
+      pageSize = 0
+    try:
+      verbose = bool( self.request.arguments[ 'extra' ][-1] )
+    except KeyError:
+      verbose = False
+    result = yield self.threadTask( self.rpc.listDirectory, path, verbose )
     if not result[ 'OK' ]:
       self.log.error( "Cannot list directory for %s:%s" % ( path, result[ 'Message' ] ) )
       raise WErr.fromError( result )
     data = result[ 'Value' ]
-    if path in data[ 'Successful' ]:
-      self.finish( self.sanitizeForJSON( data ) )
-    else:
+    if not path in data[ 'Successful' ]:
       raise WErr( 404, data[ 'Failed' ][ path ] )
+    contents = data[ 'Successful' ][ path ]
+    ch = {}
+    for kind in contents:
+      ch[ kind ] = {}
+      for sp in contents[ kind ]:
+        ch[ kind ][ sp[ len( path ) + 1: ] ] = contents[ kind ][ sp ]
+    self.finish( self.sanitizeForJSON( ch ) )
 
   @web.asynchronous
   def post( self, did, obj ):

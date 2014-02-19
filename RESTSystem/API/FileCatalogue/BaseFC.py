@@ -37,6 +37,8 @@ class BaseFC( RESTHandler ):
       return default
 
   def decodePath( self, did ):
+    if not did:
+      return "/"
     try:
       return base64.urlsafe_b64decode( str( did ) ).rstrip( "/" ) or "/"
     except TypeError, e:
