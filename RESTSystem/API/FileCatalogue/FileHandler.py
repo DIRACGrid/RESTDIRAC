@@ -14,7 +14,7 @@ class FileHandler( BaseFC ):
 
   @web.asynchronous
   def get( self, fid, obj ):
-    if not obj:
+    if obj == "attributes":
       self.__getAttributes( fid )
     elif obj == "metadata":
       self.__getMetadata( fid )
