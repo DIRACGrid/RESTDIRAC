@@ -1,9 +1,13 @@
+################################################################################
+# $HeadURL $
+################################################################################
+"""
+  AuthHandler to provide Oauth authentication to the DIRAC REST server
+"""
 
-from tornado import web, gen
-from DIRAC import gConfig
-from RESTDIRAC.RESTSystem.Base.RESTHandler import RESTHandler, WErr, WOK
-from RESTDIRAC.RESTSystem.Client.OAToken import OAToken
-from DIRAC.ConfigurationSystem.Client.Helpers import Registry
+__RCSID__  = "$Id$"
+
+from RESTDIRAC.RESTSystem.Base.RESTHandler import RESTHandler
 from RESTDIRAC.ConfigurationSystem.Client.Helpers.RESTConf import getCodeAuthURL
 
 class AuthHandler( RESTHandler ):
