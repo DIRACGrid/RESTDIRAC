@@ -1,8 +1,7 @@
-import types
 import functools
 from DIRAC import S_OK, S_ERROR, gLogger
-from DIRAC.Core.Utilities import Time, DictCache
-from DIRAC.Core.Utilities.Backports import getcallargs
+from DIRAC.Core.Utilities import DictCache
+from inspect import getcallargs
 from DIRAC.Core.DISET.RPCClient import RPCClient
 
 __remoteMethods__ = []

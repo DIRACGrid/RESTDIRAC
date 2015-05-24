@@ -1,8 +1,5 @@
 import types
-import json
-import urllib
 import base64
-from tornado import web, gen
 from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, RESTHandler
 from DIRAC.Core.DISET.RPCClient import RPCClient
 from DIRAC.Core.Utilities import List, Time
@@ -53,11 +50,11 @@ class BaseFC( RESTHandler ):
         val[ k ] = self.sanitizeForJSON( val[ k ] )
     elif vType == types.ListType:
       for iP in range( len( val ) ):
-        val[ iP ] = self.sanitizeForJSON( val[ i ] )
+        val[ iP ] = self.sanitizeForJSON( val[ iP ] )
     elif vType == types.TupleType:
       nt = []
       for iP in range( len( val ) ):
-        nt[ iP ] = self.sanitizeForJSON( val[ i ] )
+        nt[ iP ] = self.sanitizeForJSON( val[ iP ] )
       val = tuple( nt )
     return val
 
