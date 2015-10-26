@@ -4,22 +4,22 @@ import json
 import os
 
 # The REST server url
-REST_URL = 'https://ccdirac06.in2p3.fr:9178'
+REST_URL = 'https://dirac4.grid.cyfronet.pl:9178'
 
 ###########################################
 # Get the access token first
 
 # GET request parameters
-params = {'response_type':'client_credentials',
+params = {'grant_type':'client_credentials',
           'group':'dirac_user',
-          'setup':'Dirac-Production'} 
+          'setup':'EGI-Production'}
 
 # The user certificate, password will be asked for to the user
 # before request submission
 certificate = ('/Users/atsareg/.globus/usercert.pem', 
                '/Users/atsareg/.globus/userkey.pem')
 
-result = requests.get(REST_URL+'/oauth2/auth',params=params,cert=certificate,verify=False)
+result = requests.get(REST_URL+'/oauth2/token',params=params,cert=certificate,verify=False)
 
 # the output is returned as a json encoded string, decode it here
 resultDict = json.loads( result.text )

@@ -80,7 +80,7 @@ class RESTHandler( tornado.web.RequestHandler ):
   __oaToken = OAToken()
   __log = False
 
-  #Helper function to create threaded gen.Tasks with automatic callback and execption handling
+  #Helper function to create threaded gen.Tasks with automatic callback and exception handling
   @staticmethod
   def threadTask( method, *args, **kwargs ):
     """
