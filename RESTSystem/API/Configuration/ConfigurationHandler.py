@@ -16,6 +16,9 @@ class ConfigurationHandler( RESTHandler ):
   @web.asynchronous
   @gen.engine
   def get( self ):
+    """ GET method to get configuration data
+    :return: requested data
+    """
 
     args = self.request.arguments
     if args.get( 'option' ):
@@ -44,3 +47,10 @@ class ConfigurationHandler( RESTHandler ):
       self.finish( json.dumps( result['Value'] ) )
     else:
       raise WErr( 500, 'Invalid argument' )
+
+  def post( self ):
+    """ Post method to change the contents od the Configuration database
+    :return: Success or Failure flag
+    """
+
+    pass
