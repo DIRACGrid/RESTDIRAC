@@ -3,7 +3,7 @@ import json
 import urllib
 from tornado import web, gen
 from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK
-from RESTDIRAC.RESTSystem.API.FileCatalogue.BaseFC import BaseFC
+from RESTDIRAC.RESTSystem.API.FileCatalog.BaseFC import BaseFC
 
 class MetadataHandler( BaseFC ):
 
