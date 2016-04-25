@@ -1,4 +1,3 @@
-
 from DIRAC import gLogger
 from DIRAC.Core.Utilities.ThreadPool import getGlobalThreadPool
 from DIRAC.Core.Security.X509Chain import X509Chain
@@ -81,8 +80,7 @@ class RESTHandler( tornado.web.RequestHandler ):
   __log = False
 
   #Helper function to create threaded gen.Tasks with automatic callback and exception handling
-  @staticmethod
-  def threadTask( method, *args, **kwargs ):
+  def threadTask( self, method, *args, **kwargs ):
     """
     Helper method to generate a gen.Task and automatically call the callback when the real
     method ends. THIS IS SPARTAAAAAAAAAA
@@ -109,7 +107,7 @@ class RESTHandler( tornado.web.RequestHandler ):
     #Put the task in the thread :)
     def threadJob( tmethod, *targs, **tkwargs ):
       tkwargs[ 'callback' ] = tornado.stack_context.wrap( tkwargs[ 'callback' ] )
-      targs = ( tmethod, RESTHandler.__disetConfig.dump(), targs )
+      targs = ( tmethod, self.__dumpCredentials(), targs )
       RESTHandler.__threadPool.generateJobAndQueueIt( cbMethod, args = targs, kwargs = tkwargs )
     #Return a YieldPoint
     genTask = tornado.gen.Task( threadJob, method, *args, **kwargs )
@@ -169,6 +167,14 @@ class RESTHandler( tornado.web.RequestHandler ):
 
     self.end_prepare()
 
+  def __dumpCredentials( self ):
+    """ Get the user credentials tuple for the request
+    """
+
+    if self.__uData:
+      return ( self.__uData['DN'], self.__uData['group'], self.__uData['setup'] )
+    else:
+      return ( None, None, None )
 
   def getClientCredentials( self ):
     """
