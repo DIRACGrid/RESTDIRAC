@@ -5,7 +5,7 @@ import base64
 from tornado import web, gen
 from DIRAC.Core.Utilities import List
 from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, RESTHandler
-from RESTDIRAC.RESTSystem.API.FileCatalogue.BaseFC import BaseFC
+from RESTDIRAC.RESTSystem.API.FileCatalog.BaseFC import BaseFC
 
 
 class DirectoryHandler( BaseFC ):
