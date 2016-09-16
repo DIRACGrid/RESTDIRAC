@@ -75,11 +75,18 @@ class TokenHandler( RESTHandler ):
         return WErr( 401, "No certificate received to issue a token" )
       DN = credDict[ 'subject' ]
       if not credDict[ 'validDN' ]:
-       return WErr( 401, "Unknown DN %s" % DN )
+        return WErr( 401, "Unknown DN %s" % DN )
     result = Registry.getGroupsForDN( DN )
     if not result[ 'OK' ]:
       return WErr( 500, result[ 'Message' ] )
     return WOK( { 'groups' : result[ 'Value' ] } )
+
+  def __getHostProperties ( self, group, DN ):
+    result = Registry.getPropertiesForEntity( group, dn = DN )
+    if not result:
+      return WErr( 500, "Can't get the Property for the host" )
+    return WOK( { 'groups' : result} )
+
 
   def groupsAction( self ):
       result = self.__getGroups()
@@ -140,7 +147,11 @@ class TokenHandler( RESTHandler ):
     if not credDict[ 'validDN' ]:
       return WErr( 401, "Unknown DN %s" % DN )
     #Check group
-    result = self.__getGroups( DN )
+    if credDict.has_key( 'group' ):
+      if credDict['group'] == 'hosts':
+        result = self.__getHostProperties( 'hosts', DN )
+    else:
+      result = self.__getGroups( DN )
     if not result.ok:
       return result
     groups = result.data[ 'groups' ]
