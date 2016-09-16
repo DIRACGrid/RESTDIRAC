@@ -33,4 +33,3 @@ class CSHandler( RESTHandler ):
       condDict[ 'Owner' ] = self.getUserName()
     result = RESTConf.getValue( path )
     self.finish( result )
-    

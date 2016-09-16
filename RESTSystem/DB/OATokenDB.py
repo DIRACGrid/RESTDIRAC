@@ -294,8 +294,6 @@ class OATokenDB( DB ):
 
     if userGroup == 'TrustedHost':
       result = Registry.getHostnameForDN( userDN )
-      print "ecco hostname"
-      print result['Value']
     else:
       result = Registry.getUsernameForDN( userDN )
     if not result[ 'OK' ]:
