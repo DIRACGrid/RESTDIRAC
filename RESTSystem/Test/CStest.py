@@ -1,6 +1,11 @@
+"""
+Test script that ask a token to the REST SERVER using a trusted host certificate.
+Gets the job history using the token.
+Gets the pilot commands using the token.
+"""
 import requests
 import json
-import os
+
 
 # The REST server url
 REST_URL = 'https://0.0.0.0:9910'
@@ -20,9 +25,9 @@ params = {'grant_type':'client_credentials',
 
 
 certificate = ('/home/cinzia/devRoot/etc/grid-security/hostcert.pem','/home/cinzia/devRoot/etc/grid-security/hostkey.pem')
-proxies=('/tmp/x509up_u1000','/tmp/x509up_u1000')
+# proxies=('/tmp/x509up_u1000','/tmp/x509up_u1000')
+# result = requests.get(REST_URL+"/oauth2/token",params=params,cert=proxies, verify=False)
 
-#result = requests.get(REST_URL+"/oauth2/token",params=params,cert=proxies, verify=False)
 result = requests.get(REST_URL+"/oauth2/token",params=params,cert=certificate,verify=False)
 
 

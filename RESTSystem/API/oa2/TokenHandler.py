@@ -147,7 +147,7 @@ class TokenHandler( RESTHandler ):
     if not credDict[ 'validDN' ]:
       return WErr( 401, "Unknown DN %s" % DN )
     #Check group
-    if credDict.has_key( 'group' ):
+    if 'group' in credDict:
       if credDict['group'] == 'hosts':
         result = self.__getHostProperties( 'hosts', DN )
     else:

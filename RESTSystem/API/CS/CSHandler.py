@@ -1,9 +1,5 @@
-import types
-import os
-import shutil
-import json
 from tornado import web, gen
-from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, TmpDir, RESTHandler
+from RESTDIRAC.RESTSystem.Base.RESTHandler import RESTHandler
 from RESTDIRAC.ConfigurationSystem.Client.Helpers import RESTConf
 
 class CSHandler( RESTHandler ):
