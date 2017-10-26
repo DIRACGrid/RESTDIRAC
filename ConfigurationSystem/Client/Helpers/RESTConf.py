@@ -5,6 +5,7 @@ import os
 from DIRAC import S_OK, S_ERROR, rootPath
 from DIRAC.ConfigurationSystem.Client.Config import gConfig
 from DIRAC.Core.Security import Locations, X509Chain
+import tempfile
 
 gBaseSection = "/REST"
 
