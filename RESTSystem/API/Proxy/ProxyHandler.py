@@ -66,18 +66,19 @@ class ProxyHandler( RESTHandler ):
       filep12 = tempfile.mktemp( suffix = '.p12' )
       with open( filep12, 'w' ) as outp12:
         outp12.write( files['p12'][0]['body'] )
-      cmd = "openssl pkcs12 -in %s -clcerts -password pass:'%s' -passout pass:'%s'" % ( filep12, password, password )
+      ppassword = '"'+password+'"'
+      cmd = "openssl pkcs12 -in %s -clcerts -password pass:'%s' -passout pass:'%s'" % ( filep12, ppassword, ppassword )
       try:
         result = shellCall( 0, [ cmd ] )
       except Exception as exc:
-        return WErr( 500, "Exception while p12 coversion" )
+        return WErr( 500, "Exception while p12 conversion" )
       finally:
         os.unlink( filep12 )
       if not result['OK']:
         return WErr( 500, "Failed to convert p12 certificate" )
       status, output, error = result['Value']
       if status:
-        return WErr( 500, "ERROR: %s" % error )
+        return WErr( 500, "ERROR: %s" % error.replace( password, "*" * len( password ) ) )
       proxyChain.loadChainFromString( output )
       proxyChain.loadKeyFromString( output, password )
     else:
