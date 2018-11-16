@@ -66,8 +66,7 @@ class ProxyHandler( RESTHandler ):
       filep12 = tempfile.mktemp( suffix = '.p12' )
       with open( filep12, 'w' ) as outp12:
         outp12.write( files['p12'][0]['body'] )
-      ppassword = '"'+password+'"'
-      cmd = "openssl pkcs12 -in %s -clcerts -password pass:'%s' -passout pass:'%s'" % ( filep12, ppassword, ppassword )
+      cmd = "openssl pkcs12 -in %s -clcerts -password pass:'%s' -passout pass:'%s'" % ( filep12, password, password )
       try:
         result = shellCall( 0, [ cmd ] )
       except Exception as exc:
