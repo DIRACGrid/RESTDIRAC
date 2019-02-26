@@ -153,6 +153,8 @@ class RESTHandler( tornado.web.RequestHandler ):
         self.send_error( 401 )
       else:
         data = result[ 'Value' ]
+        if data[ 'UserGroup' ] == 'TrustedHost':
+          data[ 'UserGroup' ] = 'hosts'
         self.__uData = { 'DN' : data[ 'UserDN' ],
                          'username' : data[ 'UserName' ],
                          'group' : data[ 'UserGroup' ],
@@ -164,7 +166,6 @@ class RESTHandler( tornado.web.RequestHandler ):
         self.log.info( "Setting DISET for %s" % cs )
     elif self.REQUIRE_ACCESS:
       raise WErr( 401, "No token provided" )
-
     self.end_prepare()
 
   def __dumpCredentials( self ):

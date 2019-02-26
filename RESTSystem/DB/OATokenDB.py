@@ -71,7 +71,7 @@ class OATokenDB( DB ):
                                                          'Code' : 'CHAR(28)',
                                                          'Secret' : 'CHAR(28)',
                                                          'ClientID' : 'CHAR(28)',
-                                                         'UserName': 'VARCHAR(16) NOT NULL',
+                                                         'UserName': 'VARCHAR(32) NOT NULL',
                                                          'UserDN': 'VARCHAR(128) NOT NULL',
                                                          'UserGroup': 'VARCHAR(16) NOT NULL',
                                                          'UserSetup': 'VARCHAR(32) NOT NULL',
@@ -292,7 +292,10 @@ class OATokenDB( DB ):
     if code:
       inData[ 'Code' ] = code
 
-    result = Registry.getUsernameForDN( userDN )
+    if userGroup == 'TrustedHost':
+      result = Registry.getHostnameForDN( userDN )
+    else:
+      result = Registry.getUsernameForDN( userDN )
     if not result[ 'OK' ]:
       return result
     inData[ 'UserName' ] = result[ 'Value' ]

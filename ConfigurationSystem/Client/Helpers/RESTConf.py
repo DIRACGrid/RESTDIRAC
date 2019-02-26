@@ -48,6 +48,9 @@ def key():
 def setup():
   return gConfig.getValue( "/DIRAC/Setup" )
 
+def getValue( path ):
+  return gConfig.getValue( path )
+
 def generateCAFile():
   """
   Generate a single CA file with all the PEMs
