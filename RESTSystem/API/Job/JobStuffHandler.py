@@ -5,8 +5,8 @@ from tornado import web, gen
 from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, TmpDir, RESTHandler
 from DIRAC.WorkloadManagementSystem.Client.SandboxStoreClient import SandboxStoreClient
 from DIRAC.Core.DISET.RPCClient import RPCClient
-from DIRAC.Core.Utilities.JDL import loadJDLAsCFG, dumpCFGAsJDL
-from DIRAC.Core.Utilities import List, CFG
+from DIRAC.Core.Utilities.JDL import loadJDLAsCFG
+from DIRAC.Core.Utilities import List
 
 class JobStuffHandler( RESTHandler ):
 

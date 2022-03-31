@@ -1,14 +1,6 @@
-
-import types
-import os
-import shutil
-import json
 from tornado import web, gen
-from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, TmpDir, RESTHandler
+from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, RESTHandler
 from DIRAC.Core.DISET.RPCClient import RPCClient
-from DIRAC.WorkloadManagementSystem.Client.SandboxStoreClient import SandboxStoreClient
-from DIRAC.Core.Utilities import List, CFG
-from DIRAC.Core.Utilities.JDL import loadJDLAsCFG, dumpCFGAsJDL
 
 class JobCountersHandler( RESTHandler ):
 

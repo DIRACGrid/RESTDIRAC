@@ -1,14 +1,12 @@
-
 import types
 import os
-import shutil
 import json
 from tornado import web, gen
 from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, TmpDir, RESTHandler
 from DIRAC.Core.DISET.RPCClient import RPCClient
 from DIRAC.WorkloadManagementSystem.Client.SandboxStoreClient import SandboxStoreClient
-from DIRAC.Core.Utilities import List, CFG
-from DIRAC.Core.Utilities.JDL import loadJDLAsCFG, dumpCFGAsJDL
+from diraccfg import CFG
+from DIRAC.Core.Utilities.JDL import dumpCFGAsJDL
 
 class JobHandler( RESTHandler ):
 
@@ -74,23 +72,29 @@ class JobHandler( RESTHandler ):
       return WOK( retData )
     indexes = self.__findIndexes( origData[ 'ParameterNames' ] )
     records = origData[ 'Records' ]
-    for record in records:
-      job = {}
-      for param in indexes[ 'attrs' ]:
-        job[ param ] = record[ indexes[ 'attrs' ][ param ] ]
-        if param in self.NUMERICAL:
-          job[ param ] = int( float( job[ param ] ) )
-      for k in ( 'flags', 'times' ):
-        job[ k ] = {}
-        for field in indexes[ k ]:
-          value = record[ indexes[ k ][ field ] ]
-          if value.lower() == "none":
-            continue
-          if k == 'flags':
-            job[ k ][ field ] = value.lower() == 'true'
-          else:
-            job[ k ][ field ] = value
-      retData[ 'jobs' ].append( job )
+
+    try:
+      for record in records:
+        job = {}
+        for param in indexes[ 'attrs' ]:
+          job[ param ] = record[ indexes[ 'attrs' ][ param ] ]
+          if param in self.NUMERICAL:
+            job[ param ] = int( float( job[ param ] ) )
+        for k in ( 'flags', 'times' ):
+          job[ k ] = {}
+          for field in indexes[ k ]:
+            value = record[ indexes[ k ][ field ] ]
+            if value.lower() == "none":
+              continue
+            if k == 'flags':
+              job[ k ][ field ] = value.lower() == 'true'
+            else:
+              job[ k ][ field ] = value
+        retData[ 'jobs' ].append( job )
+
+    except Exception as exc:
+      raise WErr( 403, "Bad jid" )
+
     return WOK( retData )
 
 
@@ -191,7 +195,7 @@ class JobHandler( RESTHandler ):
     jids = []
     rpc = RPCClient( 'WorkloadManagement/JobManager' )
     for manifest in manifests:
-      jdl = dumpCFGAsJDL( CFG.CFG().loadFromDict( manifest ) )
+      jdl = dumpCFGAsJDL( CFG().loadFromDict( manifest ) )
       result = yield self.threadTask( rpc.submitJob, str( jdl ) )
       if not result[ 'OK' ]:
         self.log.error( "Could not submit job: %s" % result[ 'Message' ] )
@@ -233,3 +237,4 @@ class JobHandler( RESTHandler ):
         # "Could not delete JID"
         raise WErr( 500, "Could not delete" )
     self.finish( { 'jid' : jid } )
+    
