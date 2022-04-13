@@ -1,8 +1,6 @@
 """ Handler to manage proxies in the ProxyManager service
 """
 
-__RCSID__ = "$Id$"
-
 import json
 import tempfile
 import os
@@ -11,9 +9,10 @@ from tornado import web, gen
 from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, WOK, RESTHandler
 from DIRAC.FrameworkSystem.Client.ProxyManagerClient import gProxyManager
 from DIRAC.Core.Utilities import Time
-from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getDNForUsername, getGroupsForDN
 from DIRAC.Core.Security.X509Chain import X509Chain
 from DIRAC.Core.Utilities.Subprocess import shellCall
+
+__RCSID__ = "$Id$"
 
 class ProxyHandler( RESTHandler ):
 
@@ -79,7 +78,7 @@ class ProxyHandler( RESTHandler ):
       if status:
         return WErr( 500, "ERROR: %s" % error.replace( password, "*" * len( password ) ) )
       proxyChain.loadChainFromString( output )
-      proxyChain.loadKeyFromString( output, password )
+      proxyChain.loadKeyFromString( output.encode(), password )
     else:
       return WErr( 500, "No certificate files provided" )
 
@@ -91,28 +90,14 @@ class ProxyHandler( RESTHandler ):
     if user.lower() != 'unknown':
       if user != p12UserName:
         return WErr( 500, "Requested user name does not match the p12 certificate" )
-    if group.lower() == "all":
-      result = proxyChain.getCredentials()
-      if not result['OK']:
-        return WErr( 500, result['Message'] )
-      userDN = result['Value']['subject']
-      result = getGroupsForDN( userDN )
-      if not result['OK']:
-        return WErr( 500, result['Message'] )
-      groups = result['Value']
-    else:
-      groups = [group]
 
-    for group in groups:
-      result = gProxyManager.uploadProxy( proxyChain, group  )
-      if not result['OK']:
-        return WErr( 500, result['Message'] )
+    result = gProxyManager.uploadProxy(proxyChain)
+    if not result['OK']:
+      return WErr( 500, "Failed proxy upload: %s" % result['Message'] )
 
     resultDict = {}
     resultDict['UserDN'] = p12UserDN
     resultDict['UserName'] = p12UserName
-    resultDict['Groups'] = result['Value'][p12UserDN]
-
     return WOK( resultDict )
 
   def post( self, user, group ):
@@ -126,4 +111,4 @@ class ProxyHandler( RESTHandler ):
     data = result.data
     self.finish( { 'UserName': data['UserName'],
                    'UserDN': data['UserDN'],
-                   'UploadedProxies': data['Groups'].keys() } )
+                 } )

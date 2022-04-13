@@ -1,3 +1,6 @@
+""" Handler for managing jobs
+"""
+
 import types
 import os
 import json
@@ -7,6 +10,8 @@ from DIRAC.Core.DISET.RPCClient import RPCClient
 from DIRAC.WorkloadManagementSystem.Client.SandboxStoreClient import SandboxStoreClient
 from diraccfg import CFG
 from DIRAC.Core.Utilities.JDL import dumpCFGAsJDL
+
+__RCSID__ = "$Id$"
 
 class JobHandler( RESTHandler ):
 
@@ -84,19 +89,18 @@ class JobHandler( RESTHandler ):
           job[ k ] = {}
           for field in indexes[ k ]:
             value = record[ indexes[ k ][ field ] ]
-            if value.lower() == "none":
+            if str(value).lower() == "none":
               continue
             if k == 'flags':
               job[ k ][ field ] = value.lower() == 'true'
             else:
-              job[ k ][ field ] = value
+              job[ k ][ field ] = str(value)
         retData[ 'jobs' ].append( job )
 
     except Exception as exc:
-      raise WErr( 403, "Bad jid" )
+      raise WErr( 403, reason = repr(exc) )
 
     return WOK( retData )
-
 
   @web.asynchronous
   @gen.engine
@@ -237,4 +241,3 @@ class JobHandler( RESTHandler ):
         # "Could not delete JID"
         raise WErr( 500, "Could not delete" )
     self.finish( { 'jid' : jid } )
-    

@@ -1,8 +1,12 @@
+""" Job history handler
+"""
+
 import datetime
 from tornado import web, gen
 from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, RESTHandler
 from DIRAC.AccountingSystem.Client.ReportsClient import ReportsClient
 
+__RCSID__ = "$Id$"
 
 class JobHistoryHandler( RESTHandler ):
 

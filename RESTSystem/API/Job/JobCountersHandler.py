@@ -1,6 +1,11 @@
+""" Handler for getting job counters
+"""
+
 from tornado import web, gen
 from RESTDIRAC.RESTSystem.Base.RESTHandler import WErr, RESTHandler
 from DIRAC.Core.DISET.RPCClient import RPCClient
+
+__RCSID__ = "$Id$"
 
 class JobCountersHandler( RESTHandler ):
 

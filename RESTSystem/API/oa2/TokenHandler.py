@@ -1,3 +1,6 @@
+""" User access token handler
+"""
+
 from tornado import web, gen
 from DIRAC import gConfig
 from RESTDIRAC.RESTSystem.Base.RESTHandler import RESTHandler, WErr, WOK
@@ -160,4 +163,3 @@ class TokenHandler( RESTHandler ):
         res[ ko ] = data[ ki ]
 
     return WOK( res )
-

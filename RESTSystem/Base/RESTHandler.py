@@ -1,9 +1,5 @@
-from DIRAC import gLogger
-from DIRAC.Core.Utilities.ThreadPool import getGlobalThreadPool
-from DIRAC.Core.Security.X509Chain import X509Chain
-from DIRAC.Core.DISET.ThreadConfig import ThreadConfig
-from RESTDIRAC.RESTSystem.Client.OAToken import OAToken
-from RESTDIRAC.ConfigurationSystem.Client.Helpers import RESTConf
+""" Base REST handler
+"""
 
 import ssl
 import functools
@@ -15,6 +11,15 @@ import tornado.web
 import tornado.ioloop
 import tornado.gen
 import tornado.stack_context
+
+from DIRAC import gLogger
+from DIRAC.Core.Utilities.ThreadPool import getGlobalThreadPool
+from DIRAC.Core.Security.X509Chain import X509Chain
+from DIRAC.Core.DISET.ThreadConfig import ThreadConfig
+from RESTDIRAC.RESTSystem.Client.OAToken import OAToken
+from RESTDIRAC.ConfigurationSystem.Client.Helpers import RESTConf
+
+__RCSID__ = "$Id$"
 
 class WErr( tornado.web.HTTPError ):
   def __init__( self, code, msg = "", **kwargs ):
